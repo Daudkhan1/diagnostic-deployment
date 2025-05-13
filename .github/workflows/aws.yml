@@ -1,0 +1,293 @@
+name: Deploy to EC2 using AWS CLI
+
+on:
+  repository_dispatch:
+    types: [web-trigger]
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+              # Step 2: Configure AWS CLI
+      
+      # Step 2: Checkout code
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          
+      # Step 3: Set environment variables based on branch
+      - name: Set environment variables
+        id: set-env
+        run: |
+          FULL_REF="${{ github.event.client_payload.branch }}"
+          BRANCH=${FULL_REF#refs/heads/}
+          echo "Triggered branch: $BRANCH"
+
+          if [ "$BRANCH" == "prod" ]; then
+            echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
+            echo "FRONT_END=diagnostic-runtime.tar" >> $GITHUB_ENV
+            echo "BACK_END=diagnostic-ui.tar" >> $GITHUB_ENV
+            echo "ANONYMIZER=diagnostic-anonymizer.tar" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
+            echo "FRONTEND_IMAGE=diagnostic-runtime:latest" >> $GITHUB_ENV
+            echo "BACKEND_IMAGE=diagnostic-ui:latest" >> $GITHUB_ENV
+            echo "ANONYMIZER_IMAGE=diagnostic-anonymizer:latest" >> $GITHUB_ENV
+          elif [ "$BRANCH" == "development" ]; then
+            echo "DEPLOY_ENV=development" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEVELOPMENT }}" >> $GITHUB_ENV
+            echo "FRONT_END=diagnostic-runtime-test.tar" >> $GITHUB_ENV
+            echo "BACK_END=diagnostic-ui-test.tar" >> $GITHUB_ENV
+            echo "ANONYMIZER=diagnostic-anonymizer-test.tar" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.DEVELOPMENT_EC2_INSTANCE }}" >> $GITHUB_ENV
+            echo "FRONTEND_IMAGE=diagnostic-runtime-test:latest" >> $GITHUB_ENV
+            echo "BACKEND_IMAGE=diagnostic-ui-test:latest" >> $GITHUB_ENV
+            echo "ANONYMIZER_IMAGE=diagnostic-anonymizer-test:latest" >> $GITHUB_ENV
+          fi
+      - name: Debug File Paths
+        run: |
+          echo "DEPLOY_ENV=${DEPLOY_ENV}"
+          echo "Checking file: ${DEPLOY_ENV}/docker-compose.yml"
+          ls -R
+          
+      # Step 4: Replace placeholders in docker-compose.yml with secrets
+      - name: Replace placeholders in docker-compose.yml
+        run: |
+
+          FILE_PATH="${DEPLOY_ENV}/docker-compose.yml"
+
+          if [ ! -f "$FILE_PATH" ]; then
+            echo "Error: $FILE_PATH not found!"
+            exit 1
+          fi
+          ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/\([&/]\)/\\\1/g' | sed 's/\$/\\$/g')
+          sed -i 's|${DB_MONGO_URL_PROD}|'"$ESCAPED_MONGO_URL"'|g' ${DEPLOY_ENV}/docker-compose.yml
+          sed -i 's|${S3_BUCKET_NAME}|'${{ secrets.S3_BUCKET_NAME }}'|g' ${DEPLOY_ENV}/docker-compose.yml
+          sed -i 's|${S3_REGION}|'${{ secrets.S3_REGION }}'|g' ${DEPLOY_ENV}/docker-compose.yml
+          sed -i 's|${S3_SOURCE_ACCESS_KEY_ID}|'${{ secrets.S3_SOURCE_ACCESS_KEY_ID }}'|g' ${DEPLOY_ENV}/docker-compose.yml
+          sed -i 's|${S3_SOURCE_SECRET_KEY}|'${{ secrets.S3_SOURCE_SECRET_KEY }}'|g' ${DEPLOY_ENV}/docker-compose.yml
+        env:
+          DB_MONGO_URL: ${{ env.DB_MONGO_URL }}
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+
+      # Step 5: Upload Docker Compose to S3
+      - name: Upload Docker Compose to S3
+        run: |
+          aws s3 cp ${DEPLOY_ENV}/docker-compose.yml s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-compose.yml
+       # New Step: Upload delegates.rb to S3
+      - name: Upload delegates.rb to S3
+        run: |
+          aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
+
+      # Step 6: Upload Docker Compose to EC2
+      - name: Copy Docker Compose file to EC2
+        run: |
+          echo "Sending SSM command to copy Docker Compose file..."
+          echo DEPLOY_ENV=${DEPLOY_ENV}
+
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \
+            --parameters '{"commands": [
+              "echo Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
+              "echo Fetching delegates.rb file...",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb"
+            ]}' \
+            --comment "Copy Docker Compose file and delegates.rb to EC2" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          STATUS="Pending"
+          for i in {1..30}; do
+            echo "Polling SSM status... attempt $i"
+            STATUS=$(aws ssm list-command-invocations \
+              --command-id "$COMMAND_ID" \
+              --details \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query "CommandInvocations[0].Status" \
+              --output text)
+            echo "Current status: $STATUS"
+
+            if [ "$STATUS" == "Success" ]; then
+              echo "Copy completed successfully."
+              break
+            elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              echo "SSM command failed with status: $STATUS"
+              ERROR_OUTPUT=$(aws ssm list-command-invocations \
+                --command-id "$COMMAND_ID" \
+                --details \
+                --region "${{ secrets.AWS_REGION }}" \
+                --query "CommandInvocations[0].CommandPlugins[0].Output" \
+                --output text)
+              echo "Error Output:"
+              echo "$ERROR_OUTPUT"
+              exit 1
+            fi
+            sleep 10
+          done
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "SSM command did not finish successfully in time. Final status: $STATUS"
+            exit 1
+          fi
+        env:
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
+
+          
+      # Step 7 Deploy on AWS
+      - name: Deploy on EC2 via SSM
+        run: |
+          echo "Sending SSM command to deploy..."
+
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \
+            --parameters '{"commands": [
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.FRONT_END }} /home/ubuntu/${{ env.FRONT_END }}",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.BACK_END }} /home/ubuntu/${{ env.BACK_END }}",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.ANONYMIZER }} /home/ubuntu/${{ env.ANONYMIZER }}",
+              "docker-compose down || true",
+              "docker rmi ${{env.FRONTEND_IMAGE}} || true",
+              "docker rmi ${{env.BACKEND_IMAGE}} || true",
+              "docker rmi ${{env.ANONYMIZER_IMAGE}} || true",
+              "docker load -i /home/ubuntu/${{ env.FRONT_END }}",
+              "docker load -i /home/ubuntu/${{ env.BACK_END }}",
+              "docker load -i /home/ubuntu/${{ env.ANONYMIZER }}",
+              "docker-compose -f /home/ubuntu/docker-compose.yml up -d",
+              "rm -f /home/ubuntu/${{ env.FRONT_END }}",
+              "rm -f /home/ubuntu/${{ env.BACK_END }}",
+              "rm -f /home/ubuntu/${{ env.ANONYMIZER }}",
+              "docker image prune -f"
+            ]}' \
+            --comment "Deploying new Docker image" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "Command ID: $COMMAND_ID"
+
+          # Loop until command finishes
+          STATUS="Pending"
+          for i in {1..30}; do
+            echo "Polling SSM status... attempt $i"
+            STATUS=$(aws ssm list-command-invocations \
+              --command-id "$COMMAND_ID" \
+              --details \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query "CommandInvocations[0].Status" \
+              --output text)
+            echo "Current status: $STATUS"
+
+            if [ "$STATUS" == "Success" ]; then
+              echo "Deployment completed successfully."
+              break
+            elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              echo "Deployment failed with status: $STATUS"
+              ERROR_OUTPUT=$(aws ssm list-command-invocations \
+                --command-id "$COMMAND_ID" \
+                --details \
+                --region "${{ secrets.AWS_REGION }}" \
+                --query "CommandInvocations[0].CommandPlugins[0].Output" \
+                --output text)
+              echo "Error Output:"
+              echo "$ERROR_OUTPUT"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          # Final check in case it timed out
+          if [ "$STATUS" != "Success" ]; then
+            echo "Deployment did not complete in time. Final status: $STATUS"
+            exit 1
+          fi
+        env:
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          FRONT_END: ${{ env.FRONT_END }}
+          BACK_END: ${{ env.BACK_END }}
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          ANONYMIZER_IMAGE: ${{ env.ANONYMIZER_IMAGE }}
+
+  
+  notify-teams:
+    name: Notify Teams
+    needs: [deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Teams Notification
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            THEME_COLOR="2DC72D"
+            EMOJI="✅"
+            TITLE="Deployment Successful"
+          else
+            THEME_COLOR="E81123"
+            EMOJI="🚨"
+            TITLE="Deployment Failed"
+          fi
+
+          echo "Job is: "
+          echo "${{ job }}"
+          FAILED_JOB="${{ job }}"
+
+          PAYLOAD="{
+            \"type\": \"message\",
+            \"attachments\": [
+              {
+                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                \"content\": {
+                  \"type\": \"AdaptiveCard\",
+                  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",
+                  \"version\": \"1.2\",
+                  \"body\": [
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"$EMOJI $TITLE\",
+                      \"weight\": \"bolder\",
+                      \"size\": \"large\"
+                    },
+                    {
+                      \"type\": \"FactSet\",
+                      \"facts\": [
+                        { \"title\": \"Repository\", \"value\": \"${{ github.repository }}\" },
+                        { \"title\": \"Branch\", \"value\": \"${{ github.ref_name }}\" },
+                        { \"title\": \"Run ID\", \"value\": \"${{ github.run_id }}\" },
+                        { \"title\": \"Failed Job\", \"value\": \"$FAILED_JOB\" }
+                      ]
+                    }
+                  ],
+                  \"actions\": [
+                    {
+                      \"type\": \"Action.OpenUrl\",
+                      \"title\": \"View Workflow Run\",
+                      \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+                    }
+                  ]
+                }
+              }
+            ]
+          }"
+          echo "PAYLOAD is: "
+          echo "$PAYLOAD"
+
+          curl -H "Content-Type: application/json" \
+                -d "$PAYLOAD" \
+                "${{ secrets.TEAMS_WEBHOOK_URL }}"
+
