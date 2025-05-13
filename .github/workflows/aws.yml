@@ -45,12 +45,27 @@ jobs:
             echo "FRONTEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-runtime:dev" >> $GITHUB_ENV
             echo "BACKEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-ui:dev" >> $GITHUB_ENV
             echo "ANONYMIZER_IMAGE=${{ secrets.ECR_URI }}/diagnostic-anonymizer:dev" >> $GITHUB_ENV
+          else
+            echo "DEPLOY_ENV=main" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_MAIN }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.MAIN_EC2_INSTANCE }}" >> $GITHUB_ENV
+            echo "FRONTEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-runtime:main" >> $GITHUB_ENV
+             echo "BACKEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-ui:main" >> $GITHUB_ENV
+             echo "ANONYMIZER_IMAGE=${{ secrets.ECR_URI }}/diagnostic-anonymizer:main" >> $GITHUB_ENV    
           fi
       - name: Debug File Paths
         run: |
           echo "DEPLOY_ENV=${DEPLOY_ENV}"
           echo "Checking file: ${DEPLOY_ENV}/docker-compose.yml"
           ls -R
+          test -f "${DEPLOY_ENV}/docker-compose.yml" && echo "File exists!" || echo "File does not exist!"
+
+      - name: Run deployment
+        run: |
+          FILE_PATH="${DEPLOY_ENV}/docker-compose.yml"
+          echo "Using file path: $FILE_PATH"
+        # Proceed with deployment using the correct file path.
+
           
       # Step 4: Replace placeholders in docker-compose.yml with secrets
       - name: Replace placeholders in docker-compose.yml
