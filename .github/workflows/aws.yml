@@ -27,7 +27,7 @@ jobs:
       - name: Set environment variables
         id: set-env
         run: |
-          FULL_REF="${{ github.event.client_payload.branch }}"
+          FULL_REF="refs/heads/main"
           BRANCH=${FULL_REF#refs/heads/}
           echo "Triggered branch: $BRANCH"
 
