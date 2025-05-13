@@ -41,7 +41,7 @@ jobs:
           elif [ "$BRANCH" == "development" ]; then
             echo "DEPLOY_ENV=development" >> $GITHUB_ENV
             echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
-            echo "EC2_INSTANCE=${{ secrets.DEVELOPMENT_EC2_INSTANCE }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
             echo "FRONTEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-runtime:dev" >> $GITHUB_ENV
             echo "BACKEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-ui:dev" >> $GITHUB_ENV
             echo "ANONYMIZER_IMAGE=${{ secrets.ECR_URI }}/diagnostic-anonymizer:dev" >> $GITHUB_ENV
@@ -55,22 +55,30 @@ jobs:
       # Step 4: Replace placeholders in docker-compose.yml with secrets
       - name: Replace placeholders in docker-compose.yml
         run: |
-
           FILE_PATH="${DEPLOY_ENV}/docker-compose.yml"
 
           if [ ! -f "$FILE_PATH" ]; then
             echo "Error: $FILE_PATH not found!"
             exit 1
           fi
-          ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/\([&/]\)/\\\1/g' | sed 's/\$/\\$/g')
-          sed -i 's|${DB_MONGO_URL_PROD}|'"$ESCAPED_MONGO_URL"'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_BUCKET_NAME}|'${{ secrets.S3_BUCKET_NAME }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_REGION}|'${{ secrets.AMAZON_S3_REGION_NAME }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_SOURCE_ACCESS_KEY_ID}|'${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_SOURCE_SECRET_KEY}|'${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}'|g' ${DEPLOY_ENV}/docker-compose.yml
+
+          ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/[&/\]/\\&/g' | sed 's/\$/\\$/g')
+
+          sed -i "s|\${DB_MONGO_URL}|${ESCAPED_MONGO_URL}|g" "$FILE_PATH"
+          sed -i "s|\${FRONTEND_IMAGE}|${FRONTEND_IMAGE}|g" "$FILE_PATH"
+          sed -i "s|\${BACKEND_IMAGE}|${BACKEND_IMAGE}|g" "$FILE_PATH"
+          sed -i "s|\${ANONYMIZER_IMAGE}|${ANONYMIZER_IMAGE}|g" "$FILE_PATH"
+          sed -i "s|\${S3_BUCKET_NAME}|${{ secrets.S3_BUCKET_NAME }}|g" "$FILE_PATH"
+          sed -i "s|\${AMAZON_S3_REGION_NAME}|${{ secrets.AMAZON_S3_REGION_NAME }}|g" "$FILE_PATH"
+          sed -i "s|\${AMAZON_S3_ACCESS_KEY_ID}|${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}|g" "$FILE_PATH"
+          sed -i "s|\${AMAZON_S3_SECRET_ACCESS_KEY}|${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}|g" "$FILE_PATH"
         env:
           DB_MONGO_URL: ${{ env.DB_MONGO_URL }}
           DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          ANONYMIZER_IMAGE: ${{ env.ANONYMIZER_IMAGE }}
+
 
       # Step 5: Upload Docker Compose to S3
       - name: Upload Docker Compose to S3
