@@ -225,69 +225,69 @@ jobs:
           ANONYMIZER_IMAGE: ${{ env.ANONYMIZER_IMAGE }}
 
   
-  notify-teams:
-    name: Notify Teams
-    needs: [deploy]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send Teams Notification
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            THEME_COLOR="2DC72D"
-            EMOJI="✅"
-            TITLE="Deployment Successful"
-          else
-            THEME_COLOR="E81123"
-            EMOJI="🚨"
-            TITLE="Deployment Failed"
-          fi
+  # notify-teams:
+  #   name: Notify Teams
+  #   needs: [deploy]
+  #   if: always()
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Send Teams Notification
+  #       run: |
+  #         if [ "${{ job.status }}" == "success" ]; then
+  #           THEME_COLOR="2DC72D"
+  #           EMOJI="✅"
+  #           TITLE="Deployment Successful"
+  #         else
+  #           THEME_COLOR="E81123"
+  #           EMOJI="🚨"
+  #           TITLE="Deployment Failed"
+  #         fi
 
-          echo "Job is: "
-          echo "${{ job }}"
-          FAILED_JOB="${{ job }}"
+  #         echo "Job is: "
+  #         echo "${{ job }}"
+  #         FAILED_JOB="${{ job }}"
 
-          PAYLOAD="{
-            \"type\": \"message\",
-            \"attachments\": [
-              {
-                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-                \"content\": {
-                  \"type\": \"AdaptiveCard\",
-                  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",
-                  \"version\": \"1.2\",
-                  \"body\": [
-                    {
-                      \"type\": \"TextBlock\",
-                      \"text\": \"$EMOJI $TITLE\",
-                      \"weight\": \"bolder\",
-                      \"size\": \"large\"
-                    },
-                    {
-                      \"type\": \"FactSet\",
-                      \"facts\": [
-                        { \"title\": \"Repository\", \"value\": \"${{ github.repository }}\" },
-                        { \"title\": \"Branch\", \"value\": \"${{ github.ref_name }}\" },
-                        { \"title\": \"Run ID\", \"value\": \"${{ github.run_id }}\" },
-                        { \"title\": \"Failed Job\", \"value\": \"$FAILED_JOB\" }
-                      ]
-                    }
-                  ],
-                  \"actions\": [
-                    {
-                      \"type\": \"Action.OpenUrl\",
-                      \"title\": \"View Workflow Run\",
-                      \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-                    }
-                  ]
-                }
-              }
-            ]
-          }"
-          echo "PAYLOAD is: "
-          echo "$PAYLOAD"
+  #         PAYLOAD="{
+  #           \"type\": \"message\",
+  #           \"attachments\": [
+  #             {
+  #               \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+  #               \"content\": {
+  #                 \"type\": \"AdaptiveCard\",
+  #                 \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",
+  #                 \"version\": \"1.2\",
+  #                 \"body\": [
+  #                   {
+  #                     \"type\": \"TextBlock\",
+  #                     \"text\": \"$EMOJI $TITLE\",
+  #                     \"weight\": \"bolder\",
+  #                     \"size\": \"large\"
+  #                   },
+  #                   {
+  #                     \"type\": \"FactSet\",
+  #                     \"facts\": [
+  #                       { \"title\": \"Repository\", \"value\": \"${{ github.repository }}\" },
+  #                       { \"title\": \"Branch\", \"value\": \"${{ github.ref_name }}\" },
+  #                       { \"title\": \"Run ID\", \"value\": \"${{ github.run_id }}\" },
+  #                       { \"title\": \"Failed Job\", \"value\": \"$FAILED_JOB\" }
+  #                     ]
+  #                   }
+  #                 ],
+  #                 \"actions\": [
+  #                   {
+  #                     \"type\": \"Action.OpenUrl\",
+  #                     \"title\": \"View Workflow Run\",
+  #                     \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+  #                   }
+  #                 ]
+  #               }
+  #             }
+  #           ]
+  #         }"
+  #         echo "PAYLOAD is: "
+  #         echo "$PAYLOAD"
 
-          curl -H "Content-Type: application/json" \
-                -d "$PAYLOAD" \
-                "${{ secrets.TEAMS_WEBHOOK_URL }}"
+  #         curl -H "Content-Type: application/json" \
+  #               -d "$PAYLOAD" \
+  #               "${{ secrets.TEAMS_WEBHOOK_URL }}"
 
