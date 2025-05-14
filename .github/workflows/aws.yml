@@ -149,7 +149,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
-            --parameters '{"commands":["echo \"Hello from SSM!\""]}' \
+            --parameters '{"commands":["echo \"Hello from SSM!\" > /home/ubuntu/ssm_test_file.txt"]}' \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
