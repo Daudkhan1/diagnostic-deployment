@@ -150,7 +150,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
             --parameters '{"commands":["echo \"Hello from SSM!\""]}' \
-            --region "${{ secrets.AWS_REGION }}" \
+            --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
 
