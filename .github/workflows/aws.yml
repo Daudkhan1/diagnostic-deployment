@@ -150,30 +150,20 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
             --parameters '{"commands": [
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.FRONT_END }} /home/ubuntu/${{ env.FRONT_END }}",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.BACK_END }} /home/ubuntu/${{ env.BACK_END }}",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.ANONYMIZER }} /home/ubuntu/${{ env.ANONYMIZER }}",
+              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
+              "cd /home/ubuntu",
               "docker-compose down || true",
-              "docker rmi ${{env.FRONTEND_IMAGE}} || true",
-              "docker rmi ${{env.BACKEND_IMAGE}} || true",
-              "docker rmi ${{env.ANONYMIZER_IMAGE}} || true",
-              "docker load -i /home/ubuntu/${{ env.FRONT_END }}",
-              "docker load -i /home/ubuntu/${{ env.BACK_END }}",
-              "docker load -i /home/ubuntu/${{ env.ANONYMIZER }}",
-              "docker-compose -f /home/ubuntu/docker-compose.yml up -d",
-              "rm -f /home/ubuntu/${{ env.FRONT_END }}",
-              "rm -f /home/ubuntu/${{ env.BACK_END }}",
-              "rm -f /home/ubuntu/${{ env.ANONYMIZER }}",
+              "docker-compose pull",
+              "docker-compose up -d",
               "docker image prune -f"
             ]}' \
-            --comment "Deploying new Docker image" \
+            --comment "Deploying containers using docker-compose and ECR images" \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
 
           echo "Command ID: $COMMAND_ID"
 
-          # Loop until command finishes
           STATUS="Pending"
           for i in {1..30}; do
             echo "Polling SSM status... attempt $i"
@@ -204,19 +194,13 @@ jobs:
             sleep 10
           done
 
-          # Final check in case it timed out
           if [ "$STATUS" != "Success" ]; then
             echo "Deployment did not complete in time. Final status: $STATUS"
             exit 1
           fi
         env:
-          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
-          FRONT_END: ${{ env.FRONT_END }}
-          BACK_END: ${{ env.BACK_END }}
           PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
-          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
-          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
-          ANONYMIZER_IMAGE: ${{ env.ANONYMIZER_IMAGE }}
+
 
   
   # notify-teams:
