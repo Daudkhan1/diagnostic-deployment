@@ -149,55 +149,12 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
-            --parameters '{"commands": [
-              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-              "cd /home/ubuntu",
-              "docker-compose down || true",
-              "docker-compose pull",
-              "docker-compose up -d",
-              "docker image prune -f"
-            ]}' \
-            --comment "Deploying containers using docker-compose and ECR images" \
-            --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+            --parameters '{"commands":["echo \"Hello from SSM!\""]}' \
+            --region "${{ secrets.AWS_REGION }}" \
             --query "Command.CommandId" \
             --output text)
 
           echo "Command ID: $COMMAND_ID"
-
-          STATUS="Pending"
-          for i in {1..30}; do
-            echo "Polling SSM status... attempt $i"
-            STATUS=$(aws ssm list-command-invocations \
-              --command-id "$COMMAND_ID" \
-              --details \
-              --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-              --query "CommandInvocations[0].Status" \
-              --output text)
-            echo "Current status: $STATUS"
-
-            if [ "$STATUS" == "Success" ]; then
-              echo "Deployment completed successfully."
-              break
-            elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
-              echo "Deployment failed with status: $STATUS"
-              ERROR_OUTPUT=$(aws ssm list-command-invocations \
-                --command-id "$COMMAND_ID" \
-                --details \
-                --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-                --query "CommandInvocations[0].CommandPlugins[0].Output" \
-                --output text)
-              echo "Error Output:"
-              echo "$ERROR_OUTPUT"
-              exit 1
-            fi
-
-            sleep 10
-          done
-
-          if [ "$STATUS" != "Success" ]; then
-            echo "Deployment did not complete in time. Final status: $STATUS"
-            exit 1
-          fi
         env:
           PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
 
