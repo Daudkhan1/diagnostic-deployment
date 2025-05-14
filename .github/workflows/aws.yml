@@ -148,7 +148,7 @@ jobs:
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=$EC2_INSTANCE" \
+            --targets "Key=InstanceIds,Values=$EC2_INSTANCE" \
             --parameters '{"commands": [
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.FRONT_END }} /home/ubuntu/${{ env.FRONT_END }}",
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.BACK_END }} /home/ubuntu/${{ env.BACK_END }}",
