@@ -31,7 +31,7 @@ jobs:
           BRANCH=${FULL_REF#refs/heads/}
           echo "Triggered branch: $BRANCH"
 
-          if [ "$BRANCH" == "prod" ]; then
+          if [ "$BRANCH" == "main" ]; then
             echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
             echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
             echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
