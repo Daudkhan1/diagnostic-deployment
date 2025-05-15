@@ -41,7 +41,7 @@ jobs:
           elif [ "$BRANCH" == "development" ]; then
             echo "DEPLOY_ENV=development" >> $GITHUB_ENV
             echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
-            echo "EC2_INSTANCE=${{ secrets.DEVELOPMENT_EC2_INSTANCE }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
             echo "FRONTEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-runtime:dev" >> $GITHUB_ENV
             echo "BACKEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-ui:dev" >> $GITHUB_ENV
             echo "ANONYMIZER_IMAGE=${{ secrets.ECR_URI }}/diagnostic-anonymizer:dev" >> $GITHUB_ENV
