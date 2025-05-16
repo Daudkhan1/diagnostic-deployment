@@ -82,7 +82,6 @@ jobs:
           aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
 
 
-
       - name: Deploy updated container via SSM
         run: |
           TRIGGER_SOURCE=${{ github.event.repository.name }}
@@ -93,36 +92,34 @@ jobs:
           echo "Branch: $BRANCH_NAME"
           echo "Image tag: $IMAGE_TAG"
 
-          COMMAND_SCRIPT=$(cat <<EOF
-          #!/bin/bash
-          set -e
-          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
-          cd /home/ubuntu
-
-          case "$TRIGGER_SOURCE" in
-            DiagnosticFrontend)
-              echo "Updating diagnostic-ui container"
-              docker pull ${ECR_URI}/diagnostic-ui:$IMAGE_TAG
-              docker-compose up -d --no-deps --build diagnostic-ui
-              ;;
-            DiagnositcAnonymiser)
-              echo "Updating diagnostic-anonymizer container"
-              docker pull ${ECR_URI}/diagnostic-anonymizer:$IMAGE_TAG
-              docker-compose up -d --no-deps --build diagnostic-anonymizer
-              ;;
-            DiagnosticRuntime)
-              echo "Updating diagnostic-runtime container"
-              docker pull ${ECR_URI}/diagnostic-runtime:$IMAGE_TAG
-              docker-compose up -d --no-deps --build diagnostic-runtime
-              ;;
-            *)
-              echo "❌ Unknown repository trigger: $TRIGGER_SOURCE"
-              exit 1
-              ;;
-          esac
-
-          docker image prune -f
-          EOF
+          # Build an array of commands (each line is an element)
+          COMMAND_SCRIPT=(
+            "#!/bin/bash"
+            "set -e"
+            "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}"
+            "cd /home/ubuntu"
+            "case \"${TRIGGER_SOURCE}\" in"
+            "  DiagnosticFrontend)"
+            "    echo \"Updating diagnostic-ui container\""
+            "    docker pull ${ECR_URI}/diagnostic-ui:${IMAGE_TAG}"
+            "    docker-compose up -d --no-deps --build diagnostic-ui"
+            "    ;;"
+            "  DiagnositcAnonymiser)"
+            "    echo \"Updating diagnostic-anonymizer container\""
+            "    docker pull ${ECR_URI}/diagnostic-anonymizer:${IMAGE_TAG}"
+            "    docker-compose up -d --no-deps --build diagnostic-anonymizer"
+            "    ;;"
+            "  DiagnosticRuntime)"
+            "    echo \"Updating diagnostic-runtime container\""
+            "    docker pull ${ECR_URI}/diagnostic-runtime:${IMAGE_TAG}"
+            "    docker-compose up -d --no-deps --build diagnostic-runtime"
+            "    ;;"
+            "  *)"
+            "    echo \"❌ Unknown repository trigger: ${TRIGGER_SOURCE}\""
+            "    exit 1"
+            "    ;;"
+            "esac"
+            "docker image prune -f"
           )
 
           echo "Sending SSM command to EC2..."
@@ -130,9 +127,9 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
-            --parameters commands=["$COMMAND_SCRIPT"] \
+            --parameters commands="${COMMAND_SCRIPT[@]}" \
             --comment "Diagnostic redeployment" \
-            --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+            --region "${AWS_REGION}" \
             --query "Command.CommandId" \
             --output text)
 
@@ -142,7 +139,7 @@ jobs:
             STATUS=$(aws ssm list-command-invocations \
               --command-id "$COMMAND_ID" \
               --details \
-              --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+              --region "${AWS_REGION}" \
               --query "CommandInvocations[0].Status" \
               --output text)
             echo "Status: $STATUS"
@@ -153,6 +150,7 @@ jobs:
         env:
           AWS_REGION: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
+
 
 
       # Step 6: Upload Docker Compose to EC2
