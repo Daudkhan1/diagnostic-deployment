@@ -81,145 +81,219 @@ jobs:
         run: |
           aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
 
-      # Step 6: Upload Docker Compose to EC2
-      - name: Copy Docker Compose file to EC2
+
+
+      - name: Deploy updated container via SSM
         run: |
-          echo "Sending SSM command to copy Docker Compose file..."
-          echo DEPLOY_ENV=${DEPLOY_ENV}
+          TRIGGER_SOURCE=${{ github.event.repository.name }}
+          BRANCH_NAME=${{ github.ref_name }}
+          IMAGE_TAG=$([[ "$BRANCH_NAME" == "main" ]] && echo "latest" || echo "dev")
 
-          COMMAND_ID=$(aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
-            --parameters '{"commands": [
-              "echo Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
-              "echo Fetching delegates.rb file...",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb"
-            ]}' \
-            --comment "Copy Docker Compose file and delegates.rb to EC2" \
-            --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-            --query "Command.CommandId" \
-            --output text)
+          echo "Triggered by repo: $TRIGGER_SOURCE"
+          echo "Branch: $BRANCH_NAME"
+          echo "Image tag: $IMAGE_TAG"
 
-          echo "SSM Command ID: $COMMAND_ID"
+          COMMAND_SCRIPT=$(cat <<EOF
+          #!/bin/bash
+          set -e
+          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
+          cd /home/ubuntu
 
-          STATUS="Pending"
-          for i in {1..30}; do
-            echo "Polling SSM status... attempt $i"
-            STATUS=$(aws ssm list-command-invocations \
-              --command-id "$COMMAND_ID" \
-              --details \
-              --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-              --query "CommandInvocations[0].Status" \
-              --output text)
-            echo "Current status: $STATUS"
-
-            if [ "$STATUS" == "Success" ]; then
-              echo "Copy completed successfully."
-              break
-            elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
-              echo "SSM command failed with status: $STATUS"
-              ERROR_OUTPUT=$(aws ssm list-command-invocations \
-                --command-id "$COMMAND_ID" \
-                --details \
-                --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-                --query "CommandInvocations[0].CommandPlugins[0].Output" \
-                --output text)
-              echo "Error Output:"
-              echo "$ERROR_OUTPUT"
+          case "$TRIGGER_SOURCE" in
+            DiagnosticFrontend)
+              echo "Updating diagnostic-ui container"
+              docker pull ${ECR_URI}/diagnostic-ui:$IMAGE_TAG
+              docker-compose up -d --no-deps --build diagnostic-ui
+              ;;
+            DiagnositcAnonymiser)
+              echo "Updating diagnostic-anonymizer container"
+              docker pull ${ECR_URI}/diagnostic-anonymizer:$IMAGE_TAG
+              docker-compose up -d --no-deps --build diagnostic-anonymizer
+              ;;
+            DiagnosticRuntime)
+              echo "Updating diagnostic-runtime container"
+              docker pull ${ECR_URI}/diagnostic-runtime:$IMAGE_TAG
+              docker-compose up -d --no-deps --build diagnostic-runtime
+              ;;
+            *)
+              echo "❌ Unknown repository trigger: $TRIGGER_SOURCE"
               exit 1
-            fi
-            sleep 10
-          done
+              ;;
+          esac
 
-          if [ "$STATUS" != "Success" ]; then
-            echo "SSM command did not finish successfully in time. Final status: $STATUS"
-            exit 1
-          fi
-        env:
-          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
-          PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
+          docker image prune -f
+          EOF
+          )
 
-          
-      # Step 7 Deploy on AWS
-      - name: Deploy on EC2 via SSM
-        run: |
-          echo "Sending SSM command to deploy..."
+          echo "Sending SSM command to EC2..."
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
-            --parameters '{"commands": [
-              "echo Checking docker and docker-compose paths...",
-              "which docker",
-              "docker --version",
-              "which docker-compose",
-              "docker-compose --version",
-
-              "echo Logging into AWS ECR...",
-              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-
-              "cd /home/ubuntu",
-
-              "echo Pulling containers and starting them...",
-              "docker-compose down || true",
-              "docker-compose pull",
-              "docker-compose up -d",
-
-              "echo Listing running containers...",
-              "docker ps -a",
-
-              "echo Showing logs for container (replace with actual name)...",
-              "docker logs your_container_name || true",
-
-              "echo Cleaning up unused Docker images...",
-              "docker image prune -f"
-            ]}' \
-            --comment "Debug deployment via SSM and Docker" \
+            --parameters commands=["$COMMAND_SCRIPT"] \
+            --comment "Diagnostic redeployment" \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
 
           echo "Command ID: $COMMAND_ID"
 
-          STATUS="Pending"
           for i in {1..30}; do
-            echo "Polling SSM status... attempt $i"
             STATUS=$(aws ssm list-command-invocations \
               --command-id "$COMMAND_ID" \
               --details \
               --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
               --query "CommandInvocations[0].Status" \
               --output text)
-            echo "Current status: $STATUS"
-
-            if [ "$STATUS" == "Success" ]; then
-              echo "Deployment completed successfully."
-              break
-            elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
-              echo "Deployment failed with status: $STATUS"
-              ERROR_OUTPUT=$(aws ssm list-command-invocations \
-                --command-id "$COMMAND_ID" \
-                --details \
-                --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-                --query "CommandInvocations[0].CommandPlugins[0].Output" \
-                --output text)
-              echo "Error Output:"
-              echo "$ERROR_OUTPUT"
-              exit 1
-            fi
-
+            echo "Status: $STATUS"
+            [[ "$STATUS" == "Success" ]] && break
+            [[ "$STATUS" =~ ^(Failed|Cancelled|TimedOut)$ ]] && exit 1
             sleep 10
           done
-
-          if [ "$STATUS" != "Success" ]; then
-            echo "Deployment did not complete in time. Final status: $STATUS"
-            exit 1
-          fi
         env:
-          PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
-          AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
+          AWS_REGION: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
+
+
+      # Step 6: Upload Docker Compose to EC2
+      # - name: Copy Docker Compose file to EC2
+      #   run: |
+      #     echo "Sending SSM command to copy Docker Compose file..."
+      #     echo DEPLOY_ENV=${DEPLOY_ENV}
+
+      #     COMMAND_ID=$(aws ssm send-command \
+      #       --document-name "AWS-RunShellScript" \
+      #       --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
+      #       --parameters '{"commands": [
+      #         "echo Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml",
+      #         "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
+      #         "echo Fetching delegates.rb file...",
+      #         "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb"
+      #       ]}' \
+      #       --comment "Copy Docker Compose file and delegates.rb to EC2" \
+      #       --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+      #       --query "Command.CommandId" \
+      #       --output text)
+
+      #     echo "SSM Command ID: $COMMAND_ID"
+
+      #     STATUS="Pending"
+      #     for i in {1..30}; do
+      #       echo "Polling SSM status... attempt $i"
+      #       STATUS=$(aws ssm list-command-invocations \
+      #         --command-id "$COMMAND_ID" \
+      #         --details \
+      #         --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+      #         --query "CommandInvocations[0].Status" \
+      #         --output text)
+      #       echo "Current status: $STATUS"
+
+      #       if [ "$STATUS" == "Success" ]; then
+      #         echo "Copy completed successfully."
+      #         break
+      #       elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+      #         echo "SSM command failed with status: $STATUS"
+      #         ERROR_OUTPUT=$(aws ssm list-command-invocations \
+      #           --command-id "$COMMAND_ID" \
+      #           --details \
+      #           --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+      #           --query "CommandInvocations[0].CommandPlugins[0].Output" \
+      #           --output text)
+      #         echo "Error Output:"
+      #         echo "$ERROR_OUTPUT"
+      #         exit 1
+      #       fi
+      #       sleep 10
+      #     done
+
+      #     if [ "$STATUS" != "Success" ]; then
+      #       echo "SSM command did not finish successfully in time. Final status: $STATUS"
+      #       exit 1
+      #     fi
+      #   env:
+      #     DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+      #     PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
+
+          
+      # # Step 7 Deploy on AWS
+      # - name: Deploy on EC2 via SSM
+      #   run: |
+      #     echo "Sending SSM command to deploy..."
+
+      #     COMMAND_ID=$(aws ssm send-command \
+      #       --document-name "AWS-RunShellScript" \
+      #       --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
+      #       --parameters '{"commands": [
+      #         "echo Checking docker and docker-compose paths...",
+      #         "which docker",
+      #         "docker --version",
+      #         "which docker-compose",
+      #         "docker-compose --version",
+
+      #         "echo Logging into AWS ECR...",
+      #         "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
+
+      #         "cd /home/ubuntu",
+
+      #         "echo Pulling containers and starting them...",
+      #         "docker-compose down || true",
+      #         "docker-compose pull",
+      #         "docker-compose up -d",
+
+      #         "echo Listing running containers...",
+      #         "docker ps -a",
+
+      #         "echo Showing logs for container (replace with actual name)...",
+      #         "docker logs your_container_name || true",
+
+      #         "echo Cleaning up unused Docker images...",
+      #         "docker image prune -f"
+      #       ]}' \
+      #       --comment "Debug deployment via SSM and Docker" \
+      #       --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+      #       --query "Command.CommandId" \
+      #       --output text)
+
+      #     echo "Command ID: $COMMAND_ID"
+
+      #     STATUS="Pending"
+      #     for i in {1..30}; do
+      #       echo "Polling SSM status... attempt $i"
+      #       STATUS=$(aws ssm list-command-invocations \
+      #         --command-id "$COMMAND_ID" \
+      #         --details \
+      #         --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+      #         --query "CommandInvocations[0].Status" \
+      #         --output text)
+      #       echo "Current status: $STATUS"
+
+      #       if [ "$STATUS" == "Success" ]; then
+      #         echo "Deployment completed successfully."
+      #         break
+      #       elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+      #         echo "Deployment failed with status: $STATUS"
+      #         ERROR_OUTPUT=$(aws ssm list-command-invocations \
+      #           --command-id "$COMMAND_ID" \
+      #           --details \
+      #           --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+      #           --query "CommandInvocations[0].CommandPlugins[0].Output" \
+      #           --output text)
+      #         echo "Error Output:"
+      #         echo "$ERROR_OUTPUT"
+      #         exit 1
+      #       fi
+
+      #       sleep 10
+      #     done
+
+      #     if [ "$STATUS" != "Success" ]; then
+      #       echo "Deployment did not complete in time. Final status: $STATUS"
+      #       exit 1
+      #     fi
+      #   env:
+      #     PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
+      #     AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
+      #     ECR_URI: ${{ secrets.ECR_URI }}
 
 
 
