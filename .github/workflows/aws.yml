@@ -243,7 +243,9 @@ jobs:
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
               "echo Fetching delegates.rb file...",
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb",
-              "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 831926608672.dkr.ecr.ap-south-1.amazonaws.com",
+              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
+              "if [ $? -eq 0 ]; then echo '✅ Docker login to ECR successful'; else echo '❌ Docker login to ECR failed' && exit 1; fi",
+
               "cd /home/ubuntu",
               "docker-compose down || true",
               "docker-compose pull",
