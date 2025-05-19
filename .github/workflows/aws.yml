@@ -92,34 +92,37 @@ jobs:
           echo "Branch: $BRANCH_NAME"
           echo "Image tag: $IMAGE_TAG"
 
-          # Build an array of commands (each line is an element)
-          COMMAND_SCRIPT=(
-            "#!/bin/bash"
-            "set -e"
-            "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}"
-            "cd /home/ubuntu"
-            "case \"${TRIGGER_SOURCE}\" in"
-            "  DiagnosticFrontend)"
-            "    echo \"Updating diagnostic-ui container\""
-            "    docker pull ${ECR_URI}/diagnostic-ui:${IMAGE_TAG}"
-            "    docker-compose up -d --no-deps --build diagnostic-ui"
-            "    ;;"
-            "  DiagnositcAnonymiser)"
-            "    echo \"Updating diagnostic-anonymizer container\""
-            "    docker pull ${ECR_URI}/diagnostic-anonymizer:${IMAGE_TAG}"
-            "    docker-compose up -d --no-deps --build diagnostic-anonymizer"
-            "    ;;"
-            "  DiagnosticRuntime)"
-            "    echo \"Updating diagnostic-runtime container\""
-            "    docker pull ${ECR_URI}/diagnostic-runtime:${IMAGE_TAG}"
-            "    docker-compose up -d --no-deps --build diagnostic-runtime"
-            "    ;;"
-            "  *)"
-            "    echo \"❌ Unknown repository trigger: ${TRIGGER_SOURCE}\""
-            "    exit 1"
-            "    ;;"
-            "esac"
-            "docker image prune -f"
+          # Create the remote script
+          COMMAND_SCRIPT=$(cat <<EOF
+          #!/bin/bash
+          set -e
+          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
+          cd /home/ubuntu
+
+          case "$TRIGGER_SOURCE" in
+            DiagnosticFrontend)
+              echo "Updating diagnostic-ui container"
+              docker pull ${ECR_URI}/diagnostic-ui:$IMAGE_TAG
+              docker-compose up -d --no-deps --build diagnostic-ui
+              ;;
+            DiagnositcAnonymiser)
+              echo "Updating diagnostic-anonymizer container"
+              docker pull ${ECR_URI}/diagnostic-anonymizer:$IMAGE_TAG
+              docker-compose up -d --no-deps --build diagnostic-anonymizer
+              ;;
+            DiagnosticRuntime)
+              echo "Updating diagnostic-runtime container"
+              docker pull ${ECR_URI}/diagnostic-runtime:$IMAGE_TAG
+              docker-compose up -d --no-deps --build diagnostic-runtime
+              ;;
+            *)
+              echo "❌ Unknown repository trigger: $TRIGGER_SOURCE"
+              exit 1
+              ;;
+          esac
+
+          docker image prune -f
+          EOF
           )
 
           echo "Sending SSM command to EC2..."
@@ -127,9 +130,9 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
-            --parameters commands="${COMMAND_SCRIPT[@]}" \
+            --parameters commands=["$COMMAND_SCRIPT"] \
             --comment "Diagnostic redeployment" \
-            --region "${AWS_REGION}" \
+            --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
 
@@ -139,7 +142,7 @@ jobs:
             STATUS=$(aws ssm list-command-invocations \
               --command-id "$COMMAND_ID" \
               --details \
-              --region "${AWS_REGION}" \
+              --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
               --query "CommandInvocations[0].Status" \
               --output text)
             echo "Status: $STATUS"
