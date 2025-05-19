@@ -152,7 +152,12 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
             --parameters '{"commands": [
+
               "#!/bin/bash",
+              "echo Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
+              "echo Fetching delegates.rb file...",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb",
               "echo Checking docker and docker-compose paths...",
               "which docker",
               "docker --version",
