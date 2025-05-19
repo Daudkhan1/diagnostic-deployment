@@ -173,9 +173,6 @@ jobs:
               "echo Listing running containers...",
               "docker ps -a",
 
-              "echo Showing logs for container (replace with actual name)...",
-              "docker logs your_container_name || true",
-
               "echo Cleaning up unused Docker images...",
               "docker image prune -f"
             ]}' \
