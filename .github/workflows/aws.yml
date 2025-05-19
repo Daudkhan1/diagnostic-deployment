@@ -164,7 +164,8 @@ jobs:
               "cd /home/ubuntu",
 
               "echo Pulling containers and starting them...",
-              "docker-compose down || true",
+              "docker-compose down -v --remove-orphans || true",
+
               "docker-compose pull",
               "docker-compose up -d --remove-orphans",
 
