@@ -249,8 +249,8 @@ jobs:
 
               "cd /home/ubuntu",
               "docker-compose down || true",
-              "docker-compose pull",
-              "docker-compose up -d",
+              "docker-compose pull && echo '✅ Images pulled' || echo '❌ Pull failed'",
+              "docker-compose up -d && echo '✅ Containers started' || echo '❌ Start failed'",
               "docker image prune -f"
             ]}' \
             --comment "Deploying containers using docker-compose and ECR images" \
