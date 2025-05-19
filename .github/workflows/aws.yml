@@ -166,7 +166,7 @@ jobs:
               "echo Pulling containers and starting them...",
               "docker-compose down || true",
               "docker-compose pull",
-              "docker-compose up -d",
+              "docker-compose up -d --remove-orphans",
 
               "echo Listing running containers...",
               "docker ps -a",
