@@ -49,25 +49,26 @@ jobs:
       - name: Debug File Paths
         run: |
           echo "DEPLOY_ENV=${DEPLOY_ENV}"
-          echo "Checking file: ${DEPLOY_ENV}/docker-compose.yml"
+          echo "Checking file: ${DEPLOY_ENV}/docker-stack.yml"
           ls -R
           
-      # Step 4: Replace placeholders in docker-compose.yml with secrets
-      - name: Replace placeholders in docker-compose.yml
+
+      # Step 4: Replace placeholders in docker-stack.yml with secrets
+      - name: Replace placeholders in docker-stack.yml
         run: |
 
-          FILE_PATH="${DEPLOY_ENV}/docker-compose.yml"
+          FILE_PATH="${DEPLOY_ENV}/docker-stack.yml"
 
           if [ ! -f "$FILE_PATH" ]; then
             echo "Error: $FILE_PATH not found!"
             exit 1
           fi
           ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/\([&/]\)/\\\1/g' | sed 's/\$/\\$/g')
-          sed -i 's|${DB_MONGO_URL_PROD}|'"$ESCAPED_MONGO_URL"'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_BUCKET_NAME}|'${{ secrets.S3_BUCKET_NAME }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_REGION}|'${{ secrets.AMAZON_S3_REGION_NAME }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_SOURCE_ACCESS_KEY_ID}|'${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_SOURCE_SECRET_KEY}|'${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}'|g' ${DEPLOY_ENV}/docker-compose.yml
+          sed -i 's|${DB_MONGO_URL_PROD}|'"$ESCAPED_MONGO_URL"'|g' ${DEPLOY_ENV}/docker-stack.yml
+          sed -i 's|${S3_BUCKET_NAME}|'${{ secrets.S3_BUCKET_NAME }}'|g' ${DEPLOY_ENV}/docker-stack.yml
+          sed -i 's|${S3_REGION}|'${{ secrets.AMAZON_S3_REGION_NAME }}'|g' ${DEPLOY_ENV}/docker-stack.yml
+          sed -i 's|${S3_SOURCE_ACCESS_KEY_ID}|'${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}'|g' ${DEPLOY_ENV}/docker-stack.yml
+          sed -i 's|${S3_SOURCE_SECRET_KEY}|'${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}'|g' ${DEPLOY_ENV}/docker-stack.yml
         env:
           DB_MONGO_URL: ${{ env.DB_MONGO_URL }}
           DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
@@ -75,7 +76,7 @@ jobs:
       # Step 5: Upload Docker Compose to S3
       - name: Upload Docker Compose to S3
         run: |
-          aws s3 cp ${DEPLOY_ENV}/docker-compose.yml s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-compose.yml
+          aws s3 cp ${DEPLOY_ENV}/docker-stack.yml s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml
        # New Step: Upload delegates.rb to S3
       - name: Upload delegates.rb to S3
         run: |
@@ -92,8 +93,8 @@ jobs:
       #       --document-name "AWS-RunShellScript" \
       #       --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
       #       --parameters '{"commands": [
-      #         "echo Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml",
-      #         "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
+      #         "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml",
+      #         "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml /home/ubuntu/docker-stack.yml",
       #         "echo Fetching delegates.rb file...",
       #         "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb"
       #       ]}' \
@@ -154,34 +155,25 @@ jobs:
             --parameters '{"commands": [
 
               "#!/bin/bash",
-              "echo Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
+              "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml /home/ubuntu/docker-stack.yml",
               "echo Fetching delegates.rb file...",
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb",
               "echo Checking docker and docker-compose paths...",
               "which docker",
               "docker --version",
-              "which docker-compose",
-              "docker-compose --version",
 
               "echo Logging into AWS ECR...",
               "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-
+              
               "cd /home/ubuntu",
-
-              "echo Pulling containers and starting them...",
-              "docker-compose down -v --remove-orphans || true",
-
-              "docker-compose pull",
-              "docker-compose up -d --remove-orphans",
-
-              "echo Listing running containers...",
-              "docker ps -a",
-
-              "echo Cleaning up unused Docker images...",
-              "docker image prune -f"
+              "docker swarm init || echo Already initialized",
+              "echo Enabling Docker Swarm...",
+              "echo Deploying with Docker Stack...",
+              "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth genai-frontend",
+              "echo Deployment complete!"
             ]}' \
-            --comment "Debug deployment via SSM and Docker" \
+            --comment "Swarm Deployment with Zero Downtime" \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
