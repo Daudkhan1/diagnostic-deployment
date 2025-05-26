@@ -115,10 +115,10 @@ jobs:
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \ 
+            --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \ # <--- ADD A BACKSLASH HERE
             --parameters '{"commands": [
               "#!/bin/bash",
-              "echo \"Current working directory on EC2: $(pwd)\"", 
+              "echo \"Current working directory on EC2: $(pwd)\"",
               "echo \"Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml\"",
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
               "echo \"Fetching delegates.rb file...\"",
@@ -187,12 +187,11 @@ jobs:
             echo "Deployment did not complete in time. Final status: $STATUS"
             exit 1
           fi
-        env: # Ensure all variables used in this run block are available
-          EC2_INSTANCE: ${{ env.EC2_INSTANCE }} # Use the dynamically set EC2 instance
+        env:
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
-
-          DEPLOY_ENV: ${{ env.DEPLOY_ENV }} # Pass DEPLOY_ENV to the env for SSM commands
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
 
 
 
