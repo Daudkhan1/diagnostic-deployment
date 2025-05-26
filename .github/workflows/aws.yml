@@ -13,9 +13,8 @@ jobs:
       # Step 1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
-              # Step 2: Configure AWS CLI
       
-      # Step 2: Checkout code
+      # Step 2: Configure AWS CLI
       - name: Configure AWS CLI
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -23,7 +22,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AMAZON_S3_REGION_NAME }}
           
-      # Step 3: Set environment variables based on branch
+      # Step 3: Set environment variables based on triggered branch
       - name: Set environment variables
         id: set-env
         run: |
@@ -34,18 +33,29 @@ jobs:
           if [ "$BRANCH" == "main" ]; then
             echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
             echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
-            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV # Using PROD_EC2_INSTANCE for main
             echo "FRONTEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-runtime:latest" >> $GITHUB_ENV
             echo "BACKEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-ui:latest" >> $GITHUB_ENV
             echo "ANONYMIZER_IMAGE=${{ secrets.ECR_URI }}/diagnostic-anonymizer:latest" >> $GITHUB_ENV
           elif [ "$BRANCH" == "development" ]; then
             echo "DEPLOY_ENV=development" >> $GITHUB_ENV
-            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
-            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV # Assuming a DEV specific URL might exist
+            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV # Assuming a DEV specific EC2 instance
             echo "FRONTEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-runtime:dev" >> $GITHUB_ENV
             echo "BACKEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-ui:dev" >> $GITHUB_ENV
             echo "ANONYMIZER_IMAGE=${{ secrets.ECR_URI }}/diagnostic-anonymizer:dev" >> $GITHUB_ENV
+          elif [ "$BRANCH" == "feature-test" ]; then # Added: Logic for feature-test branch
+            echo "DEPLOY_ENV=feature-test" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_TEST }}" >> $GITHUB_ENV # NEW: Specific DB URL for test
+            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV # NEW: Specific EC2 instance for test
+            echo "FRONTEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-runtime:test" >> $GITHUB_ENV # NEW: Test image tag
+            echo "BACKEND_IMAGE=${{ secrets.ECR_URI }}/diagnostic-ui:test" >> $GITHUB_ENV # NEW: Test image tag
+            echo "ANONYMIZER_IMAGE=${{ secrets.ECR_URI }}/diagnostic-anonymizer:test" >> $GITHUB_ENV # NEW: Test image tag
+          else
+            echo "Error: Unknown branch '$BRANCH' received from client_payload. Exiting."
+            exit 1
           fi
+      
       - name: Debug File Paths
         run: |
           echo "DEPLOY_ENV=${DEPLOY_ENV}"
@@ -55,31 +65,47 @@ jobs:
       # Step 4: Replace placeholders in docker-compose.yml with secrets
       - name: Replace placeholders in docker-compose.yml
         run: |
-
           FILE_PATH="${DEPLOY_ENV}/docker-compose.yml"
 
           if [ ! -f "$FILE_PATH" ]; then
             echo "Error: $FILE_PATH not found!"
             exit 1
           fi
+          
+          # Use env vars set in previous step for replacements
           ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/\([&/]\)/\\\1/g' | sed 's/\$/\\$/g')
-          sed -i 's|${DB_MONGO_URL_PROD}|'"$ESCAPED_MONGO_URL"'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_BUCKET_NAME}|'${{ secrets.S3_BUCKET_NAME }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_REGION}|'${{ secrets.AMAZON_S3_REGION_NAME }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_SOURCE_ACCESS_KEY_ID}|'${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-          sed -i 's|${S3_SOURCE_SECRET_KEY}|'${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}'|g' ${DEPLOY_ENV}/docker-compose.yml
-        env:
+          sed -i 's|${DB_MONGO_URL_PLACEHOLDER}|'"$ESCAPED_MONGO_URL"'|g' ${FILE_PATH} # Adjusted placeholder name
+          sed -i 's|${S3_BUCKET_NAME_PLACEHOLDER}|'${{ secrets.S3_BUCKET_NAME }}'|g' ${FILE_PATH} # Adjusted placeholder name
+          sed -i 's|${S3_REGION_PLACEHOLDER}|'${{ secrets.AMAZON_S3_REGION_NAME }}'|g' ${FILE_PATH} # Adjusted placeholder name
+          sed -i 's|${S3_SOURCE_ACCESS_KEY_ID_PLACEHOLDER}|'${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}'|g' ${FILE_PATH} # Adjusted placeholder name
+          sed -i 's|${S3_SOURCE_SECRET_KEY_PLACEHOLDER}|'${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}'|g' ${FILE_PATH} # Adjusted placeholder name
+          
+          # Replace ECR image URIs based on the dynamically set environment variables
+          sed -i "s|__FRONTEND_IMAGE__|${FRONTEND_IMAGE}|g" ${FILE_PATH}
+          sed -i "s|__BACKEND_IMAGE__|${BACKEND_IMAGE}|g" ${FILE_PATH}
+          sed -i "s|__ANONYMIZER_IMAGE__|${ANONYMIZER_IMAGE}|g" ${FILE_PATH}
+
+        env: # Ensure all variables used in sed commands are available
           DB_MONGO_URL: ${{ env.DB_MONGO_URL }}
           DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          ANONYMIZER_IMAGE: ${{ env.ANONYMIZER_IMAGE }}
+
 
       # Step 5: Upload Docker Compose to S3
       - name: Upload Docker Compose to S3
         run: |
           aws s3 cp ${DEPLOY_ENV}/docker-compose.yml s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-compose.yml
-       # New Step: Upload delegates.rb to S3
+       # New Step: Upload delegates.rb to S3 (ensure it exists in each DEPLOY_ENV directory if needed)
       - name: Upload delegates.rb to S3
         run: |
-          aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
+          # Only upload if delegates.rb exists in the specific DEPLOY_ENV directory
+          if [ -f "${DEPLOY_ENV}/delegates.rb" ]; then
+            aws s3 cp ${DEPLOY_ENV}/delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
+          else
+            echo "Warning: delegates.rb not found in ${DEPLOY_ENV}/ directory. Skipping upload."
+          fi
 
           
       # Step 7 Deploy on AWS
@@ -89,38 +115,38 @@ jobs:
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
+            --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \ # Changed: Use dynamically set EC2_INSTANCE
             --parameters '{"commands": [
-
               "#!/bin/bash",
-              "echo Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml",
+              "echo \"Current working directory on EC2: $(pwd)\"", # Debugging line
+              "echo \"Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml\"",
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
-              "echo Fetching delegates.rb file...",
+              "echo \"Fetching delegates.rb file...\"",
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb",
-              "echo Checking docker and docker-compose paths...",
+              "echo \"Checking docker and docker-compose paths...\"",
               "which docker",
               "docker --version",
               "which docker-compose",
               "docker-compose --version",
 
-              "echo Logging into AWS ECR...",
+              "echo \"Logging into AWS ECR...\"",
               "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
 
               "cd /home/ubuntu",
 
-              "echo Pulling containers and starting them...",
+              "echo \"Pulling containers and starting them...\"",
               "docker-compose down -v --remove-orphans || true",
 
               "docker-compose pull",
               "docker-compose up -d --remove-orphans",
 
-              "echo Listing running containers...",
+              "echo \"Listing running containers...\"",
               "docker ps -a",
 
-              "echo Cleaning up unused Docker images...",
+              "echo \"Cleaning up unused Docker images...\"",
               "docker image prune -f"
             ]}' \
-            --comment "Debug deployment via SSM and Docker" \
+            --comment "Deployment via SSM and Docker for ${{ env.DEPLOY_ENV }}" \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
@@ -161,158 +187,8 @@ jobs:
             echo "Deployment did not complete in time. Final status: $STATUS"
             exit 1
           fi
-        env:
-          PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
+        env: # Ensure all variables used in this run block are available
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }} # Use the dynamically set EC2 instance
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
-
-
-
-
-      # - name: Deploy on EC2 via SSM
-      #   run: |
-      #     echo "Sending SSM command to deploy..."
-      #     COMMAND_ID=$(aws ssm send-command \
-      #       --document-name "AWS-RunShellScript" \
-      #       --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
-      #       --parameters '{"commands": [
-      #         "echo Checking docker and docker-compose paths...",
-      #         "which docker",
-      #         "docker --version",
-      #         "which docker-compose",
-      #         "docker-compose --version",
-
-      #         "echo Logging into AWS ECR...",
-      #         "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-
-      #         "cd /home/ubuntu",
-
-      #         "echo Pulling containers and starting them...",
-      #         "docker-compose down -v --remove-orphans || true",
-
-      #         "docker-compose pull",
-      #         "docker-compose up -d --remove-orphans",
-
-      #         "echo Listing running containers...",
-      #         "docker ps -a",
-
-      #         "echo Showing logs for container (replace with actual name)...",
-      #         "docker logs your_container_name || true",
-
-      #         "echo Cleaning up unused Docker images...",
-      #         "docker image prune -f"
-      #       ]}' \
-      #       --comment "Deploying containers using docker-compose and ECR images" \
-      #       --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-      #       --query "Command.CommandId" \
-      #       --output text)
-
-      #     echo "Command ID: $COMMAND_ID"
-
-      #     STATUS="Pending"
-      #     for i in {1..30}; do
-      #       echo "Polling SSM status... attempt $i"
-      #       STATUS=$(aws ssm list-command-invocations \
-      #         --command-id "$COMMAND_ID" \
-      #         --details \
-      #         --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-      #         --query "CommandInvocations[0].Status" \
-      #         --output text)
-      #       echo "Current status: $STATUS"
-
-      #       if [ "$STATUS" == "Success" ]; then
-      #         echo "Deployment completed successfully."
-      #         break
-      #       elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
-      #         echo "Deployment failed with status: $STATUS"
-      #         ERROR_OUTPUT=$(aws ssm list-command-invocations \
-      #           --command-id "$COMMAND_ID" \
-      #           --details \
-      #           --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-      #           --query "CommandInvocations[0].CommandPlugins[0].Output" \
-      #           --output text)
-      #         echo "Error Output:"
-      #         echo "$ERROR_OUTPUT"
-      #         exit 1
-      #       fi
-
-      #       sleep 10
-      #     done
-
-      #     if [ "$STATUS" != "Success" ]; then
-      #       echo "Deployment did not complete in time. Final status: $STATUS"
-      #       exit 1
-      #     fi
-      #   env:
-      #     PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
-      #     AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
-      #     ECR_URI: ${{ secrets.ECR_URI }}
-
-
-  
-  # notify-teams:
-  #   name: Notify Teams
-  #   needs: [deploy]
-  #   if: always()
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Send Teams Notification
-  #       run: |
-  #         if [ "${{ job.status }}" == "success" ]; then
-  #           THEME_COLOR="2DC72D"
-  #           EMOJI="✅"
-  #           TITLE="Deployment Successful"
-  #         else
-  #           THEME_COLOR="E81123"
-  #           EMOJI="🚨"
-  #           TITLE="Deployment Failed"
-  #         fi
-
-  #         echo "Job is: "
-  #         echo "${{ job }}"
-  #         FAILED_JOB="${{ job }}"
-
-  #         PAYLOAD="{
-  #           \"type\": \"message\",
-  #           \"attachments\": [
-  #             {
-  #               \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-  #               \"content\": {
-  #                 \"type\": \"AdaptiveCard\",
-  #                 \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",
-  #                 \"version\": \"1.2\",
-  #                 \"body\": [
-  #                   {
-  #                     \"type\": \"TextBlock\",
-  #                     \"text\": \"$EMOJI $TITLE\",
-  #                     \"weight\": \"bolder\",
-  #                     \"size\": \"large\"
-  #                   },
-  #                   {
-  #                     \"type\": \"FactSet\",
-  #                     \"facts\": [
-  #                       { \"title\": \"Repository\", \"value\": \"${{ github.repository }}\" },
-  #                       { \"title\": \"Branch\", \"value\": \"${{ github.ref_name }}\" },
-  #                       { \"title\": \"Run ID\", \"value\": \"${{ github.run_id }}\" },
-  #                       { \"title\": \"Failed Job\", \"value\": \"$FAILED_JOB\" }
-  #                     ]
-  #                   }
-  #                 ],
-  #                 \"actions\": [
-  #                   {
-  #                     \"type\": \"Action.OpenUrl\",
-  #                     \"title\": \"View Workflow Run\",
-  #                     \"url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-  #                   }
-  #                 ]
-  #               }
-  #             }
-  #           ]
-  #         }"
-  #         echo "PAYLOAD is: "
-  #         echo "$PAYLOAD"
-
-  #         curl -H "Content-Type: application/json" \
-  #               -d "$PAYLOAD" \
-  #               "${{ secrets.TEAMS_WEBHOOK_URL }}"
-
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }} # Pass DEPLOY_ENV to the env for SSM commands

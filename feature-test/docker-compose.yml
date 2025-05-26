@@ -1,0 +1,67 @@
+services:
+  cantaloupe:
+    image: islandora/cantaloupe:3
+    container_name: cantaloupe_image_server
+    ports:
+      - "8182:8182"  # Expose port 8182 to the host
+    environment:
+      - CANTALOUPE_HEAP_MIN=3G
+      - CANTALOUPE_HEAP_MAX=5G
+      - CANTALOUPE_HTTP_PORT=8182
+      - CANTALOUPE_SOURCE_STATIC=S3Source  # Use S3 as the source
+      - CANTALOUPE_S3SOURCE_ACCESS_KEY_ID=${S3_SOURCE_ACCESS_KEY_ID}  # S3 Access Key
+      - CANTALOUPE_S3SOURCE_SECRET_KEY=${S3_SOURCE_SECRET_KEY}  # S3 Secret Key
+      - CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_BUCKET_NAME=${S3_BUCKET_NAME}  # Your S3 bucket name
+      - CANTALOUPE_S3SOURCE_REGION=${S3_REGION}  # S3 region
+      - CANTALOUPE_PROCESSOR_MANUALSELECTIONSTRATEGY_TIF=JaiProcessor
+      - CANTALOUPE_S3SOURCE_LOOKUP_STRATEGY=ScriptLookupStrategy
+      - CANTALOUPE_DELEGATE_SCRIPT_ENABLED=true
+      - CANTALOUPE_DELEGATE_SCRIPT_PATHNAME=/opt/cantaloupe/delegates.rb
+      - CANTALOUPE_CACHE_SERVER_SOURCE=""
+    volumes:
+      - /home/ubuntu/delegates.rb:/opt/cantaloupe/delegates.rb
+    networks:
+      - app-network
+    restart: unless-stopped
+  react_app:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:ftest  # Use the pre-built image instead of building it
+    container_name: react_frontend
+    ports:
+      - "5173:5173"  # Exposing React app on port 5173
+    environment:
+      - NODE_ENV=production  # Can be changed to production if you're building for production
+      - VITE_BACKEND_URL=http://springboot-app:8080
+    networks:
+      - app-network
+    command: ["npm", "run", "dev:prod"]  # This adds the --host flag to bind to 0.0.0.0
+    restart: unless-stopped
+
+  springboot-app:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:test              # Specify an image name for reuse
+    container_name: springboot_container
+    networks:
+      - app-network
+    environment:
+      - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
+      - SPRING_PROFILES_ACTIVE=with-ai-annotation
+      - ANONYMIZER_SERVICE_URL=http://40.172.81.255:8001
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+  anonymizer-service:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:test
+    networks:
+      - app-network    
+    environment:
+      - AMAZON_S3_ACCESS_KEY_ID=${S3_SOURCE_ACCESS_KEY_ID}
+      - AMAZON_S3_SECRET_ACCESS_KEY=${S3_SOURCE_SECRET_KEY}
+      - AMAZON_S3_REGION_NAME=${S3_REGION}
+      - OUTPUT_DIRECTORY=/tmp
+    ports:
+      - 8001:8001
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+    
