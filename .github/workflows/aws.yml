@@ -14,7 +14,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.client_payload.branch || 'main' }}
+          ref: ${{ github.event.client_payload.branch }}
               
       
       # Step 2: Configure AWS CLI
