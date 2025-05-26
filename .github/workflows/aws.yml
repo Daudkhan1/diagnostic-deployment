@@ -58,7 +58,7 @@ jobs:
       - name: Replace placeholders in docker-compose.yml
         run: |
 
-          FILE_PATH="$feature-1/docker-compose.yml"
+          FILE_PATH="${DEPLOY_ENV}/docker-compose.yml"
 
           if [ ! -f "$FILE_PATH" ]; then
             echo "Error: $FILE_PATH not found!"
