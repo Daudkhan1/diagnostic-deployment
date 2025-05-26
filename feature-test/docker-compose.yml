@@ -24,7 +24,7 @@ services:
       - app-network
     restart: unless-stopped
   react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:feature  # Use the pre-built image instead of building it
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:ftest  # Use the pre-built image instead of building it
     container_name: react_frontend
     ports:
       - "5173:5173"  # Exposing React app on port 5173
@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
 
   springboot-app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:feature              # Specify an image name for reuse
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:test              # Specify an image name for reuse
     container_name: springboot_container
     networks:
       - app-network
@@ -49,7 +49,7 @@ services:
       - 8080:8080
     restart: unless-stopped
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:feature
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:test
     networks:
       - app-network    
     environment:
