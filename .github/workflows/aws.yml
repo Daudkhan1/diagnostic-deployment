@@ -191,10 +191,9 @@ jobs:
           EC2_INSTANCE: ${{ env.EC2_INSTANCE }} # Use the dynamically set EC2 instance
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
-<<<<<<< HEAD
+
           DEPLOY_ENV: ${{ env.DEPLOY_ENV }} # Pass DEPLOY_ENV to the env for SSM commands
-=======
-          DEPLOY_ENV: ${{ env.DEPLOY_ENV }} # Pass DEPLOY_ENV to the env for SSM commands
+
 
 
 
@@ -346,4 +345,3 @@ jobs:
   #               -d "$PAYLOAD" \
   #               "${{ secrets.TEAMS_WEBHOOK_URL }}"
 
->>>>>>> df0e22f (feature-test)
