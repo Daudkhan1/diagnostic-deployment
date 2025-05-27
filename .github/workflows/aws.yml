@@ -115,29 +115,38 @@ jobs:
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
+            --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE}}" \
             --parameters '{"commands": [
-
               "#!/bin/bash",
-              "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml /home/ubuntu/docker-stack.yml",
-              "echo Fetching delegates.rb file...",
+              "echo \"Current working directory on EC2: $(pwd)\"", # Debugging line
+              "echo \"Trying to fetch docker-compose.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml\"",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-compose.yml /home/ubuntu/docker-compose.yml",
+              "echo \"Fetching delegates.rb file...\"",
               "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb",
-              "echo Checking docker and docker-compose paths...",
+              "echo \"Checking docker and docker-compose paths...\"",
               "which docker",
               "docker --version",
+              "which docker-compose",
+              "docker-compose --version",
 
-              "echo Logging into AWS ECR...",
+              "echo \"Logging into AWS ECR...\"",
               "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-              
+
               "cd /home/ubuntu",
-              "docker swarm init || echo Already initialized",
-              "echo Enabling Docker Swarm...",
-              "echo Deploying with Docker Stack...",
-              "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth genai-frontend",
-              "echo Deployment complete!"
+
+              "echo \"Pulling containers and starting them...\"",
+              "docker-compose down -v --remove-orphans || true",
+
+              "docker-compose pull",
+              "docker-compose up -d --remove-orphans",
+
+              "echo \"Listing running containers...\"",
+              "docker ps -a",
+
+              "echo \"Cleaning up unused Docker images...\"",
+              "docker image prune -f"
             ]}' \
-            --comment "Swarm Deployment with Zero Downtime" \
+            --comment "Deployment via SSM and Docker for ${{ env.DEPLOY_ENV }}" \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
@@ -178,10 +187,12 @@ jobs:
             echo "Deployment did not complete in time. Final status: $STATUS"
             exit 1
           fi
-        env:
-          PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
+        env: # Ensure all variables used in this run block are available
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }} # Use the dynamically set EC2 instance
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }} # Pass DEPLOY_ENV to the env for SSM commands
+
 
 
       # - name: Deploy on EC2 via SSM
