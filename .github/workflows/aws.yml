@@ -175,7 +175,7 @@ jobs:
               "docker swarm init || echo Already initialized",
               "echo Enabling Docker Swarm...",
               "echo Deploying with Docker Stack...",
-              "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth genai-frontend",
+              "sudo docker stack deploy --prune -c /home/ubuntu/docker-stack.yml --with-registry-auth genai-frontend",
               "echo Deployment complete!"
             ]}' \
             --comment "Swarm Deployment with Zero Downtime" \
