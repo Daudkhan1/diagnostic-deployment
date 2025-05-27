@@ -1,18 +1,20 @@
+version: "3.8"
+
 services:
   cantaloupe:
     image: islandora/cantaloupe:3
     container_name: cantaloupe_image_server
     ports:
-      - "8182:8182"  # Expose port 8182 to the host
+      - "8182:8182"
     environment:
       - CANTALOUPE_HEAP_MIN=3G
       - CANTALOUPE_HEAP_MAX=5G
       - CANTALOUPE_HTTP_PORT=8182
-      - CANTALOUPE_SOURCE_STATIC=S3Source  # Use S3 as the source
-      - CANTALOUPE_S3SOURCE_ACCESS_KEY_ID=${AMAZON_S3_ACCESS_KEY_ID}  # S3 Access Key
-      - CANTALOUPE_S3SOURCE_SECRET_KEY=${AMAZON_S3_SECRET_ACCESS_KEY}  # S3 Secret Key
-      - CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_BUCKET_NAME=${S3_BUCKET_NAME}  # Your S3 bucket name
-      - CANTALOUPE_S3SOURCE_REGION=${AMAZON_S3_REGION_NAME}  # S3 region
+      - CANTALOUPE_SOURCE_STATIC=S3Source
+      - CANTALOUPE_S3SOURCE_ACCESS_KEY_ID=${AMAZON_S3_ACCESS_KEY_ID}
+      - CANTALOUPE_S3SOURCE_SECRET_KEY=${AMAZON_S3_SECRET_ACCESS_KEY}
+      - CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_BUCKET_NAME=${S3_BUCKET_NAME}
+      - CANTALOUPE_S3SOURCE_REGION=${AMAZON_S3_REGION_NAME}
       - CANTALOUPE_PROCESSOR_MANUALSELECTIONSTRATEGY_TIF=JaiProcessor
       - CANTALOUPE_S3SOURCE_LOOKUP_STRATEGY=ScriptLookupStrategy
       - CANTALOUPE_DELEGATE_SCRIPT_ENABLED=true
@@ -23,6 +25,7 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+
   mongo:
     image: mongo:latest
     container_name: mongo_container
@@ -41,22 +44,33 @@ services:
     volumes:
       - "mongo_data:/data/db"
       - "mongo_config:/data/configdb"
-      - "./dump:/dump"  # Mount the dump folder containing the BSON data
+      - "./dump:/dump"
     restart: unless-stopped
 
   react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev  # Use the pre-built image instead of building it
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev
     container_name: react_frontend
     ports:
-      - "5173:5173"  # Exposing React app on port 5173
+      - "3000:5173"
     environment:
       - NODE_ENV=production
     networks:
       - app-network
     restart: unless-stopped
+    deploy:
+      mode: replicated
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      restart_policy:
+        condition: on-failure
 
   springboot-app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:dev               # Specify an image name for reuse
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:dev
     container_name: springboot_container
     networks:
       - app-network
@@ -67,12 +81,23 @@ services:
     ports:
       - 8080:8080
     restart: unless-stopped
-  
+    deploy:
+      mode: replicated
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      restart_policy:
+        condition: on-failure
+
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev               # Specify an image name for reuse
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev
     container_name: anonymizer_container
     networks:
-      - app-network  # I just copied from DignosticAI please tell me the correct way for this    
+      - app-network
     environment:
       - AMAZON_S3_ACCESS_KEY_ID=${S3_SOURCE_ACCESS_KEY_ID}
       - AMAZON_S3_SECRET_ACCESS_KEY=${S3_SOURCE_SECRET_KEY}
@@ -81,6 +106,17 @@ services:
     ports:
       - 8001:8001
     restart: unless-stopped
+    deploy:
+      mode: replicated
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      restart_policy:
+        condition: on-failure
 
 volumes:
   mongo_data:
@@ -88,4 +124,4 @@ volumes:
 
 networks:
   app-network:
-    driver: bridge
+    driver: overlay
