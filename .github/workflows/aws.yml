@@ -202,29 +202,23 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
             --parameters '{"commands": [
+              "#!/bin/bash",
               "echo Checking docker and docker-compose paths...",
               "which docker",
               "docker --version",
               "which docker-compose",
               "docker-compose --version",
-
               "echo Logging into AWS ECR...",
-              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-
+              "aws ecr get-login-password --region '${{ secrets.AMAZON_S3_REGION_NAME }}' | docker login --username AWS --password-stdin '${{ secrets.ECR_URI }}'",
               "cd /home/ubuntu",
-
               "echo Pulling containers and starting them...",
               "docker-compose down -v --remove-orphans || true",
-
               "docker-compose pull",
               "docker-compose up -d --remove-orphans",
-
               "echo Listing running containers...",
               "docker ps -a",
-
               "echo Showing logs for container (replace with actual name)...",
               "docker logs your_container_name || true",
-
               "echo Cleaning up unused Docker images...",
               "docker image prune -f"
             ]}' \
