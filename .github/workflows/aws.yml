@@ -56,22 +56,27 @@ jobs:
       # Step 4: Replace placeholders in docker-stack.yml with secrets
       - name: Replace placeholders in docker-stack.yml
         run: |
-
           FILE_PATH="${DEPLOY_ENV}/docker-stack.yml"
 
           if [ ! -f "$FILE_PATH" ]; then
             echo "Error: $FILE_PATH not found!"
             exit 1
           fi
-          ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/\([&/]\)/\\\1/g' | sed 's/\$/\\$/g')
-          sed -i 's|${DB_MONGO_URL_PROD}|'${{ secret.MONGO_URL }}'|g' ${DEPLOY_ENV}/docker-stack.yml
-          sed -i 's|${S3_BUCKET_NAME}|'${{ secrets.S3_BUCKET_NAME }}'|g' ${DEPLOY_ENV}/docker-stack.yml
-          sed -i 's|${S3_REGION}|'${{ secrets.AMAZON_S3_REGION_NAME }}'|g' ${DEPLOY_ENV}/docker-stack.yml
-          sed -i 's|${S3_SOURCE_ACCESS_KEY_ID}|'${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}'|g' ${DEPLOY_ENV}/docker-stack.yml
-          sed -i 's|${S3_SOURCE_SECRET_KEY}|'${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}'|g' ${DEPLOY_ENV}/docker-stack.yml
+
+          # Escape Mongo URL for sed
+          ESCAPED_MONGO_URL=$(printf '%s\n' "${MONGO_URL}" | sed -e 's/[\/&]/\\&/g' -e 's/\$/\\$/g')
+
+          sed -i "s|\${DB_MONGO_URL_PROD}|${ESCAPED_MONGO_URL}|g" "$FILE_PATH"
+          sed -i "s|\${S3_BUCKET_NAME}|${S3_BUCKET_NAME}|g" "$FILE_PATH"
+          sed -i "s|\${S3_REGION}|${S3_REGION}|g" "$FILE_PATH"
+          sed -i "s|\${S3_SOURCE_ACCESS_KEY_ID}|${S3_ACCESS_KEY_ID}|g" "$FILE_PATH"
+          sed -i "s|\${S3_SOURCE_SECRET_KEY}|${S3_SECRET_ACCESS_KEY}|g" "$FILE_PATH"
         env:
-          DB_MONGO_URL: ${{ env.DB_MONGO_URL }}
-          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          MONGO_URL: ${{ secrets.MONGO_URL }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          S3_REGION: ${{ secrets.AMAZON_S3_REGION_NAME }}
+          S3_ACCESS_KEY_ID: ${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}
 
       # Step 5: Upload Docker Compose to S3
       - name: Upload Docker Compose to S3
