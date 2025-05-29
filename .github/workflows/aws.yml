@@ -64,19 +64,20 @@ jobs:
           fi
 
           # Escape Mongo URL for sed
-          ESCAPED_MONGO_URL=$(printf '%s\n' "${MONGO_URL}" | sed -e 's/[\/&]/\\&/g' -e 's/\$/\\$/g')
+          ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/[&/$]/\\&/g')
 
           sed -i "s|\${DB_MONGO_URL_PROD}|${ESCAPED_MONGO_URL}|g" "$FILE_PATH"
-          sed -i "s|\${S3_BUCKET_NAME}|${S3_BUCKET_NAME}|g" "$FILE_PATH"
-          sed -i "s|\${S3_REGION}|${S3_REGION}|g" "$FILE_PATH"
-          sed -i "s|\${S3_SOURCE_ACCESS_KEY_ID}|${S3_ACCESS_KEY_ID}|g" "$FILE_PATH"
-          sed -i "s|\${S3_SOURCE_SECRET_KEY}|${S3_SECRET_ACCESS_KEY}|g" "$FILE_PATH"
+          sed -i "s|\${PRAID_S3_BUCKET_NAME}|${PRAID_S3_BUCKET_NAME}|g" "$FILE_PATH"
+          sed -i "s|\${PRAID_S3_REGION_NAME}|${PRAID_S3_REGION_NAME}|g" "$FILE_PATH"
+          sed -i "s|\${PRAID_S3_ACCESS_KEY_ID}|${PRAID_S3_ACCESS_KEY_ID}|g" "$FILE_PATH"
+          sed -i "s|\${PRAID_S3_SECRET_ACCESS_KEY}|${PRAID_S3_SECRET_ACCESS_KEY}|g" "$FILE_PATH"
         env:
-          MONGO_URL: ${{ secrets.MONGO_URL }}
-          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-          S3_REGION: ${{ secrets.AMAZON_S3_REGION_NAME }}
-          S3_ACCESS_KEY_ID: ${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}
-          S3_SECRET_ACCESS_KEY: ${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}
+          DEPLOY_ENV: production                  # Replace with your actual deployment folder
+          DB_MONGO_URL: ${{ secrets.DB_MONGO_URL_PROD }}
+          PRAID_S3_BUCKET_NAME: ${{ secrets.PRAID_S3_BUCKET_NAME }}
+          PRAID_S3_REGION_NAME: ${{ secrets.PRAID_S3_REGION_NAME }}
+          PRAID_S3_ACCESS_KEY_ID: ${{ secrets.PRAID_S3_ACCESS_KEY_ID }}
+          PRAID_S3_SECRET_ACCESS_KEY: ${{ secrets.PRAID_S3_SECRET_ACCESS_KEY }}
 
       # Step 5: Upload Docker Compose to S3
       - name: Upload Docker Compose to S3
@@ -175,7 +176,7 @@ jobs:
               "docker swarm init || echo Already initialized",
               "echo Enabling Docker Swarm...",
               "echo Deploying with Docker Stack...",
-              "sudo docker stack deploy --prune -c /home/ubuntu/docker-stack.yml --with-registry-auth genai-frontend",
+              "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth genai-frontend",
               "echo Deployment complete!"
             ]}' \
             --comment "Swarm Deployment with Zero Downtime" \
