@@ -60,7 +60,7 @@ services:
         target: /dump
 
   react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:latest
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev
     ports:
       - "5173:5173"
     environment:
