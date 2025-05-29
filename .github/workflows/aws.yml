@@ -72,7 +72,7 @@ jobs:
           sed -i "s|\${PRAID_S3_ACCESS_KEY_ID}|${PRAID_S3_ACCESS_KEY_ID}|g" "$FILE_PATH"
           sed -i "s|\${PRAID_S3_SECRET_ACCESS_KEY}|${PRAID_S3_SECRET_ACCESS_KEY}|g" "$FILE_PATH"
         env:
-          DEPLOY_ENV: production                  # Replace with your actual deployment folder
+          DEPLOY_ENV: ${{DEPLOY_ENV}}                  # Replace with your actual deployment folder
           DB_MONGO_URL: ${{ secrets.DB_MONGO_URL_PROD }}
           PRAID_S3_BUCKET_NAME: ${{ secrets.PRAID_S3_BUCKET_NAME }}
           PRAID_S3_REGION_NAME: ${{ secrets.PRAID_S3_REGION_NAME }}
