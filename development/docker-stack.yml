@@ -39,27 +39,29 @@ services:
 
   mongo:
     image: mongo:latest
-    container_name: mongo_container
-    command: [ "--replSet", "rs0", "--bind_ip_all", "--port", "27017" ]
+    entrypoint: ["/usr/local/bin/entrypoint.sh"]
     ports:
-      - 27017:27017
+      - "27017:27017"
     networks:
       - app-network
     healthcheck:
-      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}) }" | mongosh --port 27017 --quiet &&
-        mongorestore /dump
+      test: ["CMD", "mongosh", "--port", "27017", "--eval", "quit(rs.status().ok ? 0 : 1)"]
       interval: 5s
       timeout: 30s
-      start_period: 0s
-      retries: 30
+      start_period: 20s
+      retries: 5
     volumes:
       - mongo_data:/data/db
       - mongo_config:/data/configdb
-      - type: bind
-        source: /home/ubuntu/dump  
-        target: /dump
+      - type: bind # 2 spaces from '-'
+        source: /home/ubuntu/dump # 2 spaces from 'type'
+        target: /dump # 2 spaces from 'type'
+      - type: bind # 2 spaces from '-'
+        source: ./entrypoint.sh
+        target: /usr/local/bin/entrypoint.sh
     deploy:
       replicas: 1
+      placement: {} # Removed commented lines to show cleaner structure
       restart_policy:
         condition: on-failure
         delay: 10s
