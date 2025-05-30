@@ -27,8 +27,7 @@ jobs:
       - name: Set environment variables
         id: set-env
         run: |
-          FULL_REF="${{ github.event.client_payload.branch }}"
-          BRANCH=${FULL_REF#refs/heads/}
+          BRANCH="${{ github.event.client_payload.branch }}"
           echo "Triggered branch: $BRANCH"
 
           if [ "$BRANCH" == "main" ]; then
