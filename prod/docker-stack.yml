@@ -51,7 +51,7 @@ services:
         condition: on-failure
 
   springboot-app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:latest
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:success
     container_name: springboot_container
     networks:
       - app-network
