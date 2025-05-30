@@ -107,7 +107,7 @@ services:
         delay: 10s
 
   springboot-app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:success
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:success1
     environment:
       - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
       - SPRING_PROFILES_ACTIVE=with-ai-annotation
