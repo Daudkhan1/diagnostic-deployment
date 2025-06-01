@@ -75,7 +75,7 @@ services:
         condition: on-failure
 
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:v1.0
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:v101
     container_name: anonymizer_container
     networks:
       - app-network
