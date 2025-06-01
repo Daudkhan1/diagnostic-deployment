@@ -90,7 +90,7 @@ jobs:
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
+            --targets "Key=instanceIds,Values=${EC2_INSTANCE}" \
             --parameters '{"commands": [
 
               "#!/bin/bash",
