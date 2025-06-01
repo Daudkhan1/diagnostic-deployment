@@ -83,10 +83,9 @@ jobs:
           aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
 
           
-      # Step 7 Deploy on AWS
       - name: Deploy on EC2 via SSM
         run: |
-          echo "Sending SSM command to deploy..."
+          echo "Sending SSM command to deploy to instance: $EC2_INSTANCE..."
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
@@ -94,10 +93,10 @@ jobs:
             --parameters '{"commands": [
 
               "#!/bin/bash",
-              "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml /home/ubuntu/docker-stack.yml",
+              "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml /home/ubuntu/docker-stack.yml",
               "echo Fetching delegates.rb file...",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb /home/ubuntu/delegates.rb",
               "echo Checking docker and docker-compose paths...",
               "which docker",
               "docker --version",
@@ -118,7 +117,6 @@ jobs:
             --output text)
 
           echo "Command ID: $COMMAND_ID"
-
           STATUS="Pending"
           for i in {1..30}; do
             echo "Polling SSM status... attempt $i"
