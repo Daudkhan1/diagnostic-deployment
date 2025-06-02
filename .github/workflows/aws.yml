@@ -152,6 +152,6 @@ jobs:
             exit 1
           fi
         env:
-          PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
