@@ -83,34 +83,32 @@ jobs:
           aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
 
           
-      - name: Deploy on EC2 via SSM
+      - name: Deploy via SSM
         run: |
-          echo "Sending SSM command to deploy to instance: $EC2_INSTANCE..."
-
+          echo "Sending SSM command to $EC2_INSTANCE..."
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${EC2_INSTANCE}" \
-            --parameters '{"commands": [
-
-              "#!/bin/bash",
-              "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml /home/ubuntu/docker-stack.yml || { echo 'Failed to copy docker-stack.yml'; exit 1; }",
-              "echo Fetching delegates.rb file...",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb /home/ubuntu/delegates.rb || { echo 'Failed to copy delegates.rb'; exit 1; }",
-              "echo Checking docker and docker-compose paths...",
-              "which docker",
-              "docker --version",
-
-              "echo Logging into AWS ECR...",
-              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-              
-              "cd /home/ubuntu",
-              "docker swarm init || echo Already initialized",
-              "echo Enabling Docker Swarm...",
-              "echo Deploying with Docker Stack...",
-              "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
-              "echo Deployment complete!"
-            ]}' \
+            --parameters '{
+              "commands": [
+                "#!/bin/bash",
+                "echo Trying to fetch docker-stack.yml from s3://***/'"${DEPLOY_ENV}"'/docker-stack.yml",
+                "aws s3 cp s3://***/'"${DEPLOY_ENV}"'/docker-stack.yml /home/ubuntu/docker-stack.yml || echo Failed to copy docker-stack.yml",
+                "echo Fetching delegates.rb file...",
+                "aws s3 cp s3://***/'"${DEPLOY_ENV}"'/delegates.rb /home/ubuntu/delegates.rb || echo Failed to copy delegates.rb",
+                "echo Checking docker and docker-compose paths...",
+                "which docker",
+                "docker --version",
+                "echo Logging into AWS ECR...",
+                "aws ecr get-login-password --region *** | docker login --username AWS --password-stdin ***",
+                "cd /home/ubuntu",
+                "docker swarm init || echo Already initialized",
+                "echo Enabling Docker Swarm...",
+                "echo Deploying with Docker Stack...",
+                "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
+                "echo Deployment complete!"
+              ]
+            }' \
             --comment "Swarm Deployment with Zero Downtime" \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
