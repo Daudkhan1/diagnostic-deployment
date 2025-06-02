@@ -94,9 +94,9 @@ jobs:
 
               "#!/bin/bash",
               "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml /home/ubuntu/docker-stack.yml",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml /home/ubuntu/docker-stack.yml || { echo 'Failed to copy docker-stack.yml'; exit 1; }",
               "echo Fetching delegates.rb file...",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb /home/ubuntu/delegates.rb",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb /home/ubuntu/delegates.rb || { echo 'Failed to copy delegates.rb'; exit 1; }",
               "echo Checking docker and docker-compose paths...",
               "which docker",
               "docker --version",
