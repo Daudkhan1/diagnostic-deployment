@@ -107,7 +107,7 @@ jobs:
               "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
               "sleep 30",
               "docker rmi -f $(docker images -q)",
-              "docker image prune -f",
+              "docker container prune -f",
               "echo Deployment complete!"
             ]}' \
             --comment "Swarm Deployment with Zero Downtime" \
