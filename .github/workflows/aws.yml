@@ -83,39 +83,37 @@ jobs:
           aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
 
           
-      - name: Deploy via SSM
-        run: |
-          echo "Sending SSM command to $EC2_INSTANCE..."
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=${EC2_INSTANCE}" \
-            --parameters '{
-              "commands": [
-                "#!/bin/bash",
-                "aws ec2 describe-instances --query \"Reservations[*].Instances[*].InstanceId\" --output text",
-                "echo Trying to fetch docker-stack.yml from s3://***/'"${DEPLOY_ENV}"'/docker-stack.yml",
-                "aws s3 cp s3://***/'"${DEPLOY_ENV}"'/docker-stack.yml /home/ubuntu/docker-stack.yml || echo Failed to copy docker-stack.yml",
-                "echo Fetching delegates.rb file...",
-                "aws s3 cp s3://***/'"${DEPLOY_ENV}"'/delegates.rb /home/ubuntu/delegates.rb || echo Failed to copy delegates.rb",
-                "echo Checking docker and docker-compose paths...",
-                "which docker",
-                "docker --version",
-                "echo Logging into AWS ECR...",
-                "aws ecr get-login-password --region *** | docker login --username AWS --password-stdin ***",
-                "cd /home/ubuntu",
-                "docker swarm init || echo Already initialized",
-                "echo Enabling Docker Swarm...",
-                "echo Deploying with Docker Stack...",
-                "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
-                "echo Deployment complete!"
-              ]
-            }' \
+            --targets "Key=instanceIds,Values=${{ secrets.PROD_EC2_INSTANCE }}" \
+            --parameters '{"commands": [
+
+              "#!/bin/bash",
+              "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml /home/ubuntu/docker-stack.yml",
+              "echo Fetching delegates.rb file...",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb",
+              "echo Checking docker and docker-compose paths...",
+              "which docker",
+              "docker --version",
+
+              "echo Logging into AWS ECR...",
+              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
+              
+              "cd /home/ubuntu",
+              "docker swarm init || echo Already initialized",
+              "echo Enabling Docker Swarm...",
+              "echo Deploying with Docker Stack...",
+              "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth genai-frontend",
+              "echo Deployment complete!"
+            ]}' \
             --comment "Swarm Deployment with Zero Downtime" \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
 
           echo "Command ID: $COMMAND_ID"
+
           STATUS="Pending"
           for i in {1..30}; do
             echo "Polling SSM status... attempt $i"
@@ -151,6 +149,6 @@ jobs:
             exit 1
           fi
         env:
-          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
+          PROD_EC2_INSTANCE: ${{ secrets.PROD_EC2_INSTANCE }}
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
