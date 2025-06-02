@@ -92,11 +92,11 @@ jobs:
             --parameters '{
               "commands": [
                 "#!/bin/bash",
-                "aws ec2 describe-instances --query \"Reservations[*].Instances[*].InstanceId\"" --output text,
+                "aws ec2 describe-instances --query \"Reservations[*].Instances[*].InstanceId\" --output text",
                 "echo Trying to fetch docker-stack.yml from s3://***/'"${DEPLOY_ENV}"'/docker-stack.yml",
-                "aws s3 cp s3://***/'"${DEPLOY_ENV}"'/docker-stack.yml /home/ubuntu/docker-stack.yml || echo Failed to copy docker-stack.yml" --output text,
+                "aws s3 cp s3://***/'"${DEPLOY_ENV}"'/docker-stack.yml /home/ubuntu/docker-stack.yml || echo Failed to copy docker-stack.yml",
                 "echo Fetching delegates.rb file...",
-                "aws s3 cp s3://***/'"${DEPLOY_ENV}"'/delegates.rb /home/ubuntu/delegates.rb || echo Failed to copy delegates.rb" --output text,
+                "aws s3 cp s3://***/'"${DEPLOY_ENV}"'/delegates.rb /home/ubuntu/delegates.rb || echo Failed to copy delegates.rb",
                 "echo Checking docker and docker-compose paths...",
                 "which docker",
                 "docker --version",
