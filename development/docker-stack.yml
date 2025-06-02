@@ -4,7 +4,7 @@ services:
   cantaloupe:
     image: islandora/cantaloupe:3
     ports:
-      - 8182:8182
+      - "8182:8182"
     environment:
       - CANTALOUPE_HEAP_MIN=3G
       - CANTALOUPE_HEAP_MAX=5G
@@ -26,24 +26,16 @@ services:
     networks:
       - app-network
     deploy:
-      replicas: 1
       restart_policy:
         condition: on-failure
-        delay: 5s
       update_config:
         parallelism: 1
         delay: 10s
         order: start-first
         failure_action: rollback
-        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 10s
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8182"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   mongo:
     image: mongo:latest
@@ -87,14 +79,14 @@ services:
     networks:
       - app-network
     deploy:
-      replicas: 1
       restart_policy:
         condition: none
+      replicas: 1
 
   react_app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev
     ports:
-      - 5173:5173
+      - "5173:5173"
     environment:
       - NODE_ENV=production
       - VITE_BACKEND_URL=http://springboot-app:8080
@@ -110,24 +102,16 @@ services:
         delay: 10s
         order: start-first
         failure_action: rollback
-        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 10s
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   springboot-app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
-    ports:
-      - "8080:8080"
     environment:
       - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
       - SPRING_PROFILES_ACTIVE=with-ai-annotation
-      - ANONYMIZER_SERVICE_URL=http:13.203.161.172:8001
+      - ANONYMIZER_SERVICE_URL=http://13.233.103.240:8001
     networks:
       - app-network
     depends_on:
@@ -142,20 +126,9 @@ services:
         delay: 10s
         order: start-first
         failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   anonymizer-service:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev
-    ports:
-      - 8001:8001
     environment:
       - AMAZON_S3_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
       - AMAZON_S3_SECRET_ACCESS_KEY=${PRAID_S3_SECRET_ACCESS_KEY}
@@ -172,15 +145,9 @@ services:
         delay: 10s
         order: start-first
         failure_action: rollback
-        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 10s
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   mongo_data:
