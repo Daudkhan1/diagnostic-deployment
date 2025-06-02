@@ -85,7 +85,7 @@ jobs:
           
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=instanceIds,Values=${{ secrets.DEV_EC2_INSTANCE }}" \
+            --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \
             --parameters '{"commands": [
 
               "#!/bin/bash",
@@ -149,6 +149,6 @@ jobs:
             exit 1
           fi
         env:
-          PROD_EC2_INSTANCE: ${{ secrets.DEV_EC2_INSTANCE }}
+          PROD_EC2_INSTANCE: ${{ env.EC2_INSTANCE }}"
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
