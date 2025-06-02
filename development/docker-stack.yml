@@ -122,10 +122,12 @@ services:
 
   springboot-app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
+    ports:
+      - "8080:8080"
     environment:
       - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
       - SPRING_PROFILES_ACTIVE=with-ai-annotation
-      - ANONYMIZER_SERVICE_URL=http://anonymizer-service:8001
+      - ANONYMIZER_SERVICE_URL=http:13.203.161.172:8001
     networks:
       - app-network
     depends_on:
