@@ -83,86 +83,75 @@ jobs:
           aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
 
           
-- name: Deploy on EC2 via SSM
-  run: |
-    echo "Verifying if EC2 instance ($EC2_INSTANCE) is managed by SSM..."
-    SSM_STATUS=$(aws ssm describe-instance-information \
-      --query "InstanceInformationList[?InstanceId=='$EC2_INSTANCE'].PingStatus" \
-      --output text)
+      - name: Deploy on EC2 via SSM
+        run: |
+          echo "Sending SSM command to deploy to instance: $EC2_INSTANCE..."
 
-    if [ "$SSM_STATUS" != "Online" ]; then
-      echo "❌ Instance $EC2_INSTANCE is not online or not managed by SSM. PingStatus: $SSM_STATUS"
-      exit 1
-    fi
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceIds,Values=${EC2_INSTANCE}" \
+            --parameters '{"commands": [
 
-    echo "✅ EC2 instance is online and managed by SSM."
-    echo "Sending SSM command to deploy to instance: $EC2_INSTANCE..."
+              "#!/bin/bash",
+              "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml /home/ubuntu/docker-stack.yml",
+              "echo Fetching delegates.rb file...",
+              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb /home/ubuntu/delegates.rb",
+              "echo Checking docker and docker-compose paths...",
+              "which docker",
+              "docker --version",
 
-    COMMAND_ID=$(aws ssm send-command \
-      --document-name "AWS-RunShellScript" \
-      --targets "Key=instanceIds,Values=${EC2_INSTANCE}" \
-      --parameters '{"commands": [
-        "#!/bin/bash",
-        "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml",
-        "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml /home/ubuntu/docker-stack.yml",
-        "echo Fetching delegates.rb file...",
-        "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb /home/ubuntu/delegates.rb",
-        "echo Verifying copied files...",
-        "if [ ! -f /home/ubuntu/docker-stack.yml ]; then echo '❌ docker-stack.yml not found!'; exit 1; fi",
-        "if [ ! -f /home/ubuntu/delegates.rb ]; then echo '❌ delegates.rb not found!'; exit 1; fi",
-        "echo ✅ Both files copied successfully.",
-        "which docker",
-        "docker --version",
-        "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-        "cd /home/ubuntu",
-        "docker swarm init || echo Already initialized",
-        "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
-        "echo ✅ Deployment complete!"
-      ]}' \
-      --comment "Swarm Deployment with Zero Downtime" \
-      --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-      --query "Command.CommandId" \
-      --output text)
+              "echo Logging into AWS ECR...",
+              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
+              
+              "cd /home/ubuntu",
+              "docker swarm init || echo Already initialized",
+              "echo Enabling Docker Swarm...",
+              "echo Deploying with Docker Stack...",
+              "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
+              "echo Deployment complete!"
+            ]}' \
+            --comment "Swarm Deployment with Zero Downtime" \
+            --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+            --query "Command.CommandId" \
+            --output text)
 
-    echo "Command ID: $COMMAND_ID"
+          echo "Command ID: $COMMAND_ID"
+          STATUS="Pending"
+          for i in {1..30}; do
+            echo "Polling SSM status... attempt $i"
+            STATUS=$(aws ssm list-command-invocations \
+              --command-id "$COMMAND_ID" \
+              --details \
+              --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+              --query "CommandInvocations[0].Status" \
+              --output text)
+            echo "Current status: $STATUS"
 
-    STATUS="Pending"
-    for i in {1..30}; do
-      echo "Polling SSM status... attempt $i"
-      STATUS=$(aws ssm list-command-invocations \
-        --command-id "$COMMAND_ID" \
-        --details \
-        --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-        --query "CommandInvocations[0].Status" \
-        --output text)
+            if [ "$STATUS" == "Success" ]; then
+              echo "Deployment completed successfully."
+              break
+            elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              echo "Deployment failed with status: $STATUS"
+              ERROR_OUTPUT=$(aws ssm list-command-invocations \
+                --command-id "$COMMAND_ID" \
+                --details \
+                --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+                --query "CommandInvocations[0].CommandPlugins[0].Output" \
+                --output text)
+              echo "Error Output:"
+              echo "$ERROR_OUTPUT"
+              exit 1
+            fi
 
-      echo "Current status: $STATUS"
+            sleep 10
+          done
 
-      if [ "$STATUS" == "Success" ]; then
-        echo "✅ Deployment completed successfully."
-        break
-      elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
-        echo "❌ Deployment failed with status: $STATUS"
-        ERROR_OUTPUT=$(aws ssm list-command-invocations \
-          --command-id "$COMMAND_ID" \
-          --details \
-          --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
-          --query "CommandInvocations[0].CommandPlugins[0].Output" \
-          --output text)
-        echo "Error Output:"
-        echo "$ERROR_OUTPUT"
-        exit 1
-      fi
-
-      sleep 10
-    done
-
-    if [ "$STATUS" != "Success" ]; then
-      echo "❌ Deployment did not complete in time. Final status: $STATUS"
-      exit 1
-    fi
-  env:
-    EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
-    AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
-    ECR_URI: ${{ secrets.ECR_URI }}
-
+          if [ "$STATUS" != "Success" ]; then
+            echo "Deployment did not complete in time. Final status: $STATUS"
+            exit 1
+          fi
+        env:
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
+          AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
+          ECR_URI: ${{ secrets.ECR_URI }}
