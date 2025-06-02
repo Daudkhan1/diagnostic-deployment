@@ -26,16 +26,24 @@ services:
     networks:
       - app-network
     deploy:
+      replicas: 2
       restart_policy:
         condition: on-failure
+        delay: 5s
       update_config:
         parallelism: 1
         delay: 10s
         order: start-first
         failure_action: rollback
+        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 10s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8182"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   mongo:
     image: mongo:latest
@@ -79,9 +87,9 @@ services:
     networks:
       - app-network
     deploy:
+      replicas: 1
       restart_policy:
         condition: none
-      replicas: 1
 
   react_app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev
@@ -94,7 +102,7 @@ services:
       - app-network
     command: ["npm", "run", "dev:prod"]
     deploy:
-      replicas: 1
+      replicas: 2
       restart_policy:
         condition: on-failure
       update_config:
@@ -102,22 +110,28 @@ services:
         delay: 10s
         order: start-first
         failure_action: rollback
+        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 10s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   springboot-app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
     environment:
       - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
       - SPRING_PROFILES_ACTIVE=with-ai-annotation
-      - ANONYMIZER_SERVICE_URL=http://13.233.103.240:8001
+      - ANONYMIZER_SERVICE_URL=http://anonymizer-service:8001
     networks:
       - app-network
     depends_on:
       - mongo-init
     deploy:
-      replicas: 1
+      replicas: 2
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -126,6 +140,15 @@ services:
         delay: 10s
         order: start-first
         failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   anonymizer-service:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev
@@ -137,7 +160,7 @@ services:
     networks:
       - app-network
     deploy:
-      replicas: 1
+      replicas: 2
       restart_policy:
         condition: on-failure
       update_config:
@@ -145,9 +168,15 @@ services:
         delay: 10s
         order: start-first
         failure_action: rollback
+        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 10s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   mongo_data:
