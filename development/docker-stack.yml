@@ -157,19 +157,3 @@ volumes:
 networks:
   app-network:
     driver: overlay
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
