@@ -38,7 +38,7 @@ services:
         delay: 10s
 
   react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:v26
     ports:
       - "5173:5173"
     environment:
