@@ -4,6 +4,11 @@ on:
   repository_dispatch:
     types: [web-trigger]
 
+
+permissions:
+  contents: write
+
+
 jobs:
   deploy:
     name: Deploy to EC2
@@ -13,7 +18,7 @@ jobs:
       # Step 1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
-              # Step 2: Configure AWS CLI
+              # Step 2: Configure AWS CLI 
       
       # Step 2: Checkout code
       - name: Configure AWS CLI
@@ -94,20 +99,20 @@ jobs:
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
           IMAGE_NAME: ${{ github.event.client_payload.image_name }}
 
-      - name: Apply updated docker-stack.yml from $DEPLOY_ENV
-        run: |
-          cp "${{ env.DEPLOY_ENV }}/docker-stack.yml" ./docker-stack.yml
-
       - name: Commit and push updated docker-stack.yml to main
         env:
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
           IMAGE_NAME: ${{ github.event.client_payload.image_name }}
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          GITHUB_TOKEN: ${{ secrets.TOKEN_COMMIT_IMAG_TAG }}
         run: |
           git config user.name "Daudkhan1"
           git config user.email "daudidrees1024@gmail.com"
-
-          git add docker-stack.yml
-          git commit -m "Update image tag to ${IMAGE_TAG} for ${IMAGE_NAME}" || echo "No changes to commit"
+          
+          git remote set-url origin https://x-access-token:${TOKEN_COMMIT_IMAG_TAG}@github.com/${{ github.repository }}
+          
+          git add "${DEPLOY_ENV}/docker-stack.yml"
+          git commit -m "Update image tag to ${IMAGE_TAG} for ${IMAGE_NAME} in ${DEPLOY_ENV}" || echo "No changes to commit"
           git push origin main
 
       # Step 5: Upload Docker Compose to S3
