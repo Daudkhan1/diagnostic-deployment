@@ -13,41 +13,53 @@ jobs:
       # Step 1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
-              # Step 2: Configure AWS CLI
-      
-      # Step 2: Checkout code
+
+      # Step 2: Configure AWS CLI
       - name: Configure AWS CLI
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AMAZON_S3_REGION_NAME }}
-          
-      # Step 3: Set environment variables based on branch
+
+      # Step 3: Set environment variables based on branch and get image info from payload
       - name: Set environment variables
         id: set-env
         run: |
           BRANCH="${{ github.event.client_payload.branch }}"
+          IMAGE_TAG="${{ github.event.client_payload.image_tag }}"
+          IMAGE_NAME="${{ github.event.client_payload.image_name }}"
           echo "Triggered branch: $BRANCH"
+          echo "Image name to update: $IMAGE_NAME"
+          echo "Image tag to update: $IMAGE_TAG"
 
           if [ "$BRANCH" == "main" ]; then
             echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
-            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
             echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
           elif [ "$BRANCH" == "development" ]; then
             echo "DEPLOY_ENV=development" >> $GITHUB_ENV
-            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV
             echo "EC2_INSTANCE=${{ secrets.DEV_EC2_INSTANCE }}" >> $GITHUB_ENV
-
+          else
+            echo "DEPLOY_ENV=development" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.DEV_EC2_INSTANCE }}" >> $GITHUB_ENV
           fi
-      - name: Debug File Paths
+
+          # Export image info for later steps
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+
+      - name: Debug File Paths and variables
         run: |
           echo "DEPLOY_ENV=${DEPLOY_ENV}"
+          echo "IMAGE_NAME=${IMAGE_NAME}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"
           echo "Checking file: ${DEPLOY_ENV}/docker-stack.yml"
           ls -R
-          
 
-      # Step 4: Replace placeholders in docker-stack.yml with secrets
+      # Step 4: Replace placeholders and update only the relevant image tag in docker-stack.yml
       - name: Replace placeholders in docker-stack.yml
         run: |
           FILE_PATH="${DEPLOY_ENV}/docker-stack.yml"
@@ -60,14 +72,19 @@ jobs:
           # Escape Mongo URL for sed
           ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/[&/$]/\\&/g')
 
+          # Replace generic placeholders
           sed -i "s|\${DB_MONGO_URL_PROD}|${ESCAPED_MONGO_URL}|g" "$FILE_PATH"
           sed -i "s|\${PRAID_S3_BUCKET_NAME}|${PRAID_S3_BUCKET_NAME}|g" "$FILE_PATH"
           sed -i "s|\${PRAID_S3_REGION_NAME}|${PRAID_S3_REGION_NAME}|g" "$FILE_PATH"
           sed -i "s|\${PRAID_S3_ACCESS_KEY_ID}|${PRAID_S3_ACCESS_KEY_ID}|g" "$FILE_PATH"
           sed -i "s|\${PRAID_S3_SECRET_ACCESS_KEY}|${PRAID_S3_SECRET_ACCESS_KEY}|g" "$FILE_PATH"
+
+          # Update only the image tag for the image name provided in payload
+          sed -i "s|\(831926608672.dkr.ecr.ap-south-1.amazonaws.com/${IMAGE_NAME}:\)[^[:space:]]*|\1${IMAGE_TAG}|g" "$FILE_PATH"
+
         env:
-          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}                  # Replace with your actual deployment folder
-          DB_MONGO_URL: ${{ secrets.DB_MONGO_URL_PROD }}
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          DB_MONGO_URL: ${{ env.DB_MONGO_URL }}
           PRAID_S3_BUCKET_NAME: ${{ secrets.PRAID_S3_BUCKET_NAME }}
           PRAID_S3_REGION_NAME: ${{ secrets.PRAID_S3_REGION_NAME }}
           PRAID_S3_ACCESS_KEY_ID: ${{ secrets.PRAID_S3_ACCESS_KEY_ID }}
@@ -77,12 +94,15 @@ jobs:
       - name: Upload Docker Compose to S3
         run: |
           aws s3 cp ${DEPLOY_ENV}/docker-stack.yml s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml
-       # New Step: Upload delegates.rb to S3
+
+      # Step 6: Upload delegates.rb to S3
       - name: Upload delegates.rb to S3
         run: |
           aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
 
-          
+      # Step 7: Trigger deployment on EC2 via SSM Run Command
+      - name: Deploy on EC2 via SSM
+        run: |
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \
@@ -152,6 +172,6 @@ jobs:
             exit 1
           fi
         env:
-          PROD_EC2_INSTANCE: ${{ env.EC2_INSTANCE }}"
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
