@@ -99,21 +99,28 @@ jobs:
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
           IMAGE_NAME: ${{ github.event.client_payload.image_name }}
 
-      - name: Commit and push updated docker-stack.yml to main
+      - name: Update and commit image tag in docker-stack.yml
         env:
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
           IMAGE_NAME: ${{ github.event.client_payload.image_name }}
-          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
           GITHUB_TOKEN: ${{ secrets.TOKEN_COMMIT_IMAG_TAG }}
         run: |
+          FILE_PATH="${DEPLOY_ENV}/docker-stack.yml"
+
+          if [ ! -f "$FILE_PATH" ]; then
+            echo "File not found: $FILE_PATH"
+            exit 1
+          fi
+
+          sed -i "s|\(831926608672.dkr.ecr.ap-south-1.amazonaws.com/${IMAGE_NAME}:\)[^[:space:]]*|\1${IMAGE_TAG}|g" "$FILE_PATH"
+
           git config user.name "Daudkhan1"
           git config user.email "daudidrees1024@gmail.com"
-          
-          git remote set-url origin https://x-access-token:${TOKEN_COMMIT_IMAG_TAG}@github.com/${{ github.repository }}
-          
-          git add "${DEPLOY_ENV}/docker-stack.yml"
-          git commit -m "Update image tag to ${IMAGE_TAG} for ${IMAGE_NAME} in ${DEPLOY_ENV}" || echo "No changes to commit"
-          git push origin main
+
+          git add "$FILE_PATH"
+          git commit -m "Update image tag to ${IMAGE_TAG} for ${IMAGE_NAME}" || echo "No changes to commit"
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
 
       # Step 5: Upload Docker Compose to S3
       - name: Upload Docker Compose to S3
