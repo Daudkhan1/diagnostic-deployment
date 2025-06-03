@@ -65,7 +65,29 @@ jobs:
           echo "Checking file: ${DEPLOY_ENV}/docker-stack.yml"
           ls -R
           
+      - name: Update and commit image tag in docker-stack.yml
+        env:
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
+          IMAGE_NAME: ${{ github.event.client_payload.image_name }}
+          GITHUB_TOKEN: ${{ secrets.TOKEN_COMMIT_IMAG_TAG }}
+        run: |
+          FILE_PATH="${DEPLOY_ENV}/docker-stack.yml"
 
+          if [ ! -f "$FILE_PATH" ]; then
+            echo "File not found: $FILE_PATH"
+            exit 1
+          fi
+
+          sed -i "s|\(831926608672.dkr.ecr.ap-south-1.amazonaws.com/${IMAGE_NAME}:\)[^[:space:]]*|\1${IMAGE_TAG}|g" "$FILE_PATH"
+
+          git config user.name "Daudkhan1"
+          git config user.email "daudidrees1024@gmail.com"
+
+          git add "$FILE_PATH"
+          git commit -m "Update image tag to ${IMAGE_TAG} for ${IMAGE_NAME}" || echo "No changes to commit"
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
+          
       # Step 4: Replace placeholders and update only the relevant image tag in docker-stack.yml
       - name: Replace placeholders in docker-stack.yml
         run: |
@@ -99,28 +121,7 @@ jobs:
           IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
           IMAGE_NAME: ${{ github.event.client_payload.image_name }}
 
-      # - name: Update and commit image tag in docker-stack.yml
-      #   env:
-      #     DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
-      #     IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
-      #     IMAGE_NAME: ${{ github.event.client_payload.image_name }}
-      #     GITHUB_TOKEN: ${{ secrets.TOKEN_COMMIT_IMAG_TAG }}
-      #   run: |
-      #     FILE_PATH="${DEPLOY_ENV}/docker-stack.yml"
 
-      #     if [ ! -f "$FILE_PATH" ]; then
-      #       echo "File not found: $FILE_PATH"
-      #       exit 1
-      #     fi
-
-      #     sed -i "s|\(831926608672.dkr.ecr.ap-south-1.amazonaws.com/${IMAGE_NAME}:\)[^[:space:]]*|\1${IMAGE_TAG}|g" "$FILE_PATH"
-
-      #     git config user.name "Daudkhan1"
-      #     git config user.email "daudidrees1024@gmail.com"
-
-      #     git add "$FILE_PATH"
-      #     git commit -m "Update image tag to ${IMAGE_TAG} for ${IMAGE_NAME}" || echo "No changes to commit"
-      #     git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
 
       # Step 5: Upload Docker Compose to S3
       - name: Upload Docker Compose to S3
