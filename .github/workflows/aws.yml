@@ -13,15 +13,16 @@ jobs:
       # Step 1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
-
-      # Step 2: Configure AWS CLI
+              # Step 2: Configure AWS CLI
+      
+      # Step 2: Checkout code
       - name: Configure AWS CLI
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AMAZON_S3_REGION_NAME }}
-
+          
       # Step 3: Set environment variables based on branch and get image info from payload
       - name: Set environment variables
         id: set-env
@@ -58,6 +59,7 @@ jobs:
           echo "IMAGE_TAG=${IMAGE_TAG}"
           echo "Checking file: ${DEPLOY_ENV}/docker-stack.yml"
           ls -R
+          
 
       # Step 4: Replace placeholders and update only the relevant image tag in docker-stack.yml
       - name: Replace placeholders in docker-stack.yml
@@ -89,17 +91,12 @@ jobs:
           PRAID_S3_REGION_NAME: ${{ secrets.PRAID_S3_REGION_NAME }}
           PRAID_S3_ACCESS_KEY_ID: ${{ secrets.PRAID_S3_ACCESS_KEY_ID }}
           PRAID_S3_SECRET_ACCESS_KEY: ${{ secrets.PRAID_S3_SECRET_ACCESS_KEY }}
+          IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
 
       # Step 5: Upload Docker Compose to S3
       - name: Upload Docker Compose to S3
         run: |
           aws s3 cp ${DEPLOY_ENV}/docker-stack.yml s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml
-
-      # Step 6: Upload delegates.rb to S3
-      - name: Upload delegates.rb to S3
-        run: |
-          aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
-
        # New Step: Upload delegates.rb to S3
       - name: Upload delegates.rb to S3
         run: |
