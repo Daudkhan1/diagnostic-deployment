@@ -91,7 +91,6 @@ services:
       - "5173:5173"
     environment:
       - NODE_ENV=production
-      - VITE_BACKEND_URL=http://springboot-app:8080
     networks:
       - app-network
     command: ["npm", "run", "dev:prod"]
