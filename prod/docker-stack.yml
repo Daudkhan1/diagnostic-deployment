@@ -103,6 +103,27 @@ services:
         parallelism: 1
         delay: 10s
 
+  portainer:
+    image: portainer/portainer-ce
+    ports:
+      - "9000:9000"
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+      - type: volume
+        source: portainer_data
+        target: /data
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - app-network
+
 volumes:
   mongo_data:
   mongo_config:
