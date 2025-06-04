@@ -114,8 +114,8 @@ services:
       - "8080:8080"
     environment:
       - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
-      - SPRING_PROFILES_ACTIVE=with-ai-annotation
-      - ANONYMIZER_SERVICE_URL=http://anonymizer-service:8001
+      - SPRING_PROFILES_ACTIVE=without-ai-annotation
+      - ANONYMIZER_SERVICE_URL=http://13.233.103.240:8001
     networks:
       - app-network
     depends_on:

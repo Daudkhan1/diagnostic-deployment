@@ -26,13 +26,16 @@ services:
     networks:
       - app-network
     deploy:
+      replicas: 2
       restart_policy:
         condition: on-failure
+        delay: 10s
+        max_attempts: 10
       update_config:
-        parallelism: 1
         delay: 10s
         order: start-first
         failure_action: rollback
+        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 10s
@@ -48,14 +51,16 @@ services:
       - app-network
     command: ["npm", "run", "dev:prod"]
     deploy:
-      replicas: 1
+      replicas: 2
       restart_policy:
         condition: on-failure
+        delay: 10s
+        max_attempts: 10
       update_config:
-        parallelism: 1
         delay: 10s
         order: start-first
         failure_action: rollback
+        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 10s
@@ -73,7 +78,7 @@ services:
     depends_on:
       - mongo-init
     deploy:
-      replicas: 1
+      replicas: 2
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -82,6 +87,10 @@ services:
         delay: 10s
         order: start-first
         failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
 
   anonymizer-service:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:v159
