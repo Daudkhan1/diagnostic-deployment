@@ -48,9 +48,6 @@ services:
       - 27017:27017
     networks:
       - app-network
-    healthcheck:
-      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}) }" | mongosh --port 27017 --quiet &&
-        mongorestore /dump
     volumes:
       - mongo_data:/data/db
       - mongo_config:/data/configdb
@@ -139,7 +136,7 @@ services:
         delay: 10s
 
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev176
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev175
     ports:
       - "8001:8001"
     environment:
