@@ -45,7 +45,7 @@ services:
     container_name: mongo_container
     command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
     ports:
-      - "27017:27017"
+      - 27017:27017
     networks:
       - app-network
     volumes:
