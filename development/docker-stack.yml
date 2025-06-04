@@ -86,7 +86,7 @@ services:
         condition: none
 
   react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev28
     ports:
       - "5173:5173"
     environment:
