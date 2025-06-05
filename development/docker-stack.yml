@@ -10,9 +10,11 @@ services:
     ports:
       - "9200:9200"
     networks:
-      - elk-network
+      - app-network
     volumes:
-      - esdata:/usr/share/elasticsearch/data
+      - type: bind
+        source: esdata
+        target: /home/ubuntu/elasticsearch/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200"]
       interval: 30s
@@ -29,9 +31,11 @@ services:
       - "5044:5044"
       - "12201:12201/udp"  # GELF input for Docker
     volumes:
-      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+      - type: bind
+        source: /home/ubuntu/logstash.conf
+        target: /usr/share/logstash/pipeline/logstash.conf
     networks:
-      - elk-network
+      - app-network
     deploy:
       replicas: 1
       restart_policy:
@@ -44,7 +48,7 @@ services:
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     networks:
-      - elk-network
+      - app-network
     deploy:
       replicas: 1
       restart_policy:
