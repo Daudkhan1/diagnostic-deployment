@@ -1,195 +1,6 @@
 version: "3.8"
-
+ 
 services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.2
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
-    ports:
-      - "9200:9200"
-    networks:
-      - app-network
-    volumes:
-      - type: volume
-        source: esdata
-        target: /usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.13.2
-    ports:
-      - "5044:5044"
-      - "12201:12201/udp"
-    volumes:
-      - type: bind
-        source: /home/ubuntu/logstash.conf
-        target: /usr/share/logstash/pipeline/logstash.conf
-    networks:
-      - app-network
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.13.2
-    ports:
-      - "5601:5601"
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    networks:
-      - app-network
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-
-  mongo:
-    image: mongo:latest
-    container_name: mongo_container
-    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
-    ports:
-      - 27017:27017
-    networks:
-      - app-network
-    volumes:
-      - mongo_data:/data/db
-      - mongo_config:/data/configdb
-      - type: bind
-        source: /home/ubuntu/dump
-        target: /dump
-    logging:
-      driver: "gelf"
-      options:
-        gelf-address: "udp://logstash:12201"
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 10
-
-  mongo-init:
-    image: mongo:latest
-    depends_on:
-      - mongo
-    entrypoint: >
-      bash -c "
-      for i in {1..30}; do
-        echo 'Waiting for Mongo...';
-        sleep 2;
-        mongosh --host mongo --port 27017 --eval '
-          try {
-            rs.status();
-          } catch (e) {
-            rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo:27017\"}]});
-          }' && break;
-      done;
-      echo 'MongoDB replica set initiated.'"
-    networks:
-      - app-network
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: none
-
-  springboot-app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
-      - SPRING_PROFILES_ACTIVE=without-ai-annotation
-      - ANONYMIZER_SERVICE_URL=http://anonymizer-service:8001
-    depends_on:
-      - mongo-init
-    networks:
-      - app-network
-    logging:
-      driver: "gelf"
-      options:
-        gelf-address: "udp://logstash:12201"
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 10
-      update_config:
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
-
-  anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev182
-    ports:
-      - "8001:8001"
-    environment:
-      - AMAZON_S3_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
-      - AMAZON_S3_SECRET_ACCESS_KEY=${PRAID_S3_SECRET_ACCESS_KEY}
-      - AMAZON_S3_REGION_NAME=${PRAID_S3_REGION_NAME}
-      - OUTPUT_DIRECTORY=/tmp
-    networks:
-      - app-network
-    logging:
-      driver: "gelf"
-      options:
-        gelf-address: "udp://logstash:12201"
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
-
-  react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev28
-    ports:
-      - "5173:5173"
-    environment:
-      - NODE_ENV=production
-    command: ["npm", "run", "dev:prod"]
-    networks:
-      - app-network
-    logging:
-      driver: "gelf"
-      options:
-        gelf-address: "udp://logstash:12201"
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
-
   cantaloupe:
     image: islandora/cantaloupe:3
     ports:
@@ -215,7 +26,7 @@ services:
     networks:
       - app-network
     deploy:
-      replicas: 1
+      replicas: 2
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -228,7 +39,130 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
-
+ 
+  mongo:
+    image: mongo:latest
+    container_name: mongo_container
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - 27017:27017
+    networks:
+      - app-network
+    healthcheck:
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}) }" | mongosh --port 27017 --quiet &&
+        mongorestore /dump
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+      - type: bind
+        source: /home/ubuntu/dump
+        target: /dump
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+ 
+  mongo-init:
+    image: mongo:latest
+    depends_on:
+      - mongo
+    entrypoint: >
+      bash -c "
+      for i in {1..30}; do
+        echo 'Waiting for Mongo...';
+        sleep 2;
+        mongosh --host mongo --port 27017 --eval '
+          try {
+            rs.status();
+          } catch (e) {
+            rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo:27017\"}]});
+          }' && break;
+      done;
+      echo 'MongoDB replica set initiated.'"
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+ 
+  react_app:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev28
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - app-network
+    command: ["npm", "run", "dev:prod"]
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+ 
+  springboot-app:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
+      - SPRING_PROFILES_ACTIVE=without-ai-annotation
+      - ANONYMIZER_SERVICE_URL=http://13.233.103.240:8001
+    networks:
+      - app-network
+    depends_on:
+      - mongo-init
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+      update_config:
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+ 
+  anonymizer-service:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev178
+    ports:
+      - "8001:8001"
+    environment:
+      - AMAZON_S3_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
+      - AMAZON_S3_SECRET_ACCESS_KEY=${PRAID_S3_SECRET_ACCESS_KEY}
+      - AMAZON_S3_REGION_NAME=${PRAID_S3_REGION_NAME}
+      - OUTPUT_DIRECTORY=/tmp
+    networks:
+      - app-network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+ 
   portainer:
     image: portainer/portainer-ce
     ports:
@@ -249,14 +183,13 @@ services:
         condition: on-failure
     networks:
       - app-network
-
 volumes:
   mongo_data:
   mongo_config:
   mongo_dump_data:
   portainer_data:
-  esdata:
-
 networks:
   app-network:
     driver: overlay
+ 
+ 
