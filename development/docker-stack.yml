@@ -12,9 +12,9 @@ services:
     networks:
       - app-network
     volumes:
-      - type: bind
+      - type: volume
         source: esdata
-        target: /home/ubuntu/elasticsearch/data
+        target: /usr/share/elasticsearch/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200"]
       interval: 30s
@@ -29,7 +29,7 @@ services:
     image: docker.elastic.co/logstash/logstash:8.13.2
     ports:
       - "5044:5044"
-      - "12201:12201/udp"  # GELF input for Docker
+      - "12201:12201/udp"
     volumes:
       - type: bind
         source: /home/ubuntu/logstash.conf
@@ -135,7 +135,7 @@ services:
         delay: 10s
 
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev181
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev180
     ports:
       - "8001:8001"
     environment:
@@ -259,6 +259,4 @@ volumes:
 
 networks:
   app-network:
-    driver: overlay
-  elk-network:
     driver: overlay
