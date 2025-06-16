@@ -26,7 +26,7 @@ services:
     networks:
       - app-network
     deploy:
-      replicas: 2
+      replicas: 1
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -95,7 +95,7 @@ services:
       - app-network
     command: ["npm", "run", "dev:prod"]
     deploy:
-      replicas: 2
+      replicas: 1
       restart_policy:
         condition: on-failure
       update_config:
@@ -121,7 +121,7 @@ services:
     depends_on:
       - mongo-init
     deploy:
-      replicas: 2
+      replicas: 1
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -147,7 +147,7 @@ services:
     networks:
       - app-network
     deploy:
-      replicas: 2
+      replicas: 1
       restart_policy:
         condition: on-failure
       update_config:
