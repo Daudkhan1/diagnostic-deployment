@@ -49,7 +49,6 @@ services:
       # - VITE_BACKEND_URL=http://springboot-app:8080
     networks:
       - app-network
-    command: ["npm", "run", "dev:prod"]
     deploy:
       replicas: 1
       restart_policy:
