@@ -86,7 +86,7 @@ services:
         condition: none
  
   react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev36
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev35
     ports:
       - "5173:5173"
     environment:
@@ -101,7 +101,7 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
-        order: stop-first
+        order: start-first
         failure_action: rollback
         monitor: 30s
       rollback_config:
