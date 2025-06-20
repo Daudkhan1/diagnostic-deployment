@@ -129,7 +129,7 @@ services:
         tag: "docker.{{.Name}}"
  
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev204
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev205
     ports:
       - "8001:8001"
     environment:
