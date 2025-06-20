@@ -6,6 +6,7 @@ services:
     ports:
       - "8182:8182"
     environment:
+      # ... [your existing environment variables] ...
       - CANTALOUPE_HEAP_MIN=3G
       - CANTALOUPE_HEAP_MAX=5G
       - CANTALOUPE_HTTP_PORT=8182
@@ -26,19 +27,13 @@ services:
     networks:
       - app-network
     deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
+      # ... [your existing deploy config] ...
+    # --- ADD THIS LOGGING SECTION ---
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "docker.{{.Name}}"
  
   mongo:
     image: mongo:latest
@@ -55,11 +50,13 @@ services:
         source: /home/ubuntu/dump
         target: /dump
     deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 10
+      # ... [your existing deploy config] ...
+    # --- ADD THIS LOGGING SECTION ---
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "docker.{{.Name}}"
  
   mongo-init:
     image: mongo:latest
@@ -84,6 +81,12 @@ services:
       replicas: 1
       restart_policy:
         condition: none
+    # --- ADD THIS LOGGING SECTION ---
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "docker.{{.Name}}"
  
   react_app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev35
@@ -95,24 +98,20 @@ services:
       - app-network
     command: ["npm", "run", "dev:prod"]
     deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
+      # ... [your existing deploy config] ...
+    # --- ADD THIS LOGGING SECTION ---
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "docker.{{.Name}}"
  
   springboot-app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
     ports:
       - "8080:8080"
     environment:
+      # ... [your existing environment variables] ...
       - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
       - SPRING_PROFILES_ACTIVE=without-ai-annotation
       - ANONYMIZER_SERVICE_URL=http://13.233.103.240:8001
@@ -121,25 +120,20 @@ services:
     depends_on:
       - mongo-init
     deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 10
-      update_config:
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
+      # ... [your existing deploy config] ...
+    # --- ADD THIS LOGGING SECTION ---
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "docker.{{.Name}}"
  
   anonymizer-service:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev203
     ports:
       - "8001:8001"
     environment:
+      # ... [your existing environment variables] ...
       - AMAZON_S3_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
       - AMAZON_S3_SECRET_ACCESS_KEY=${PRAID_S3_SECRET_ACCESS_KEY}
       - AMAZON_S3_REGION_NAME=${PRAID_S3_REGION_NAME}
@@ -147,18 +141,13 @@ services:
     networks:
       - app-network
     deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
+      # ... [your existing deploy config] ...
+    # --- ADD THIS LOGGING SECTION ---
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "docker.{{.Name}}"
  
   portainer:
     image: portainer/portainer-ce
@@ -180,13 +169,75 @@ services:
         condition: on-failure
     networks:
       - app-network
+    # --- ADD THIS LOGGING SECTION ---
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: "docker.{{.Name}}"
+
+  # --- EFK STACK SERVICES ---
+  
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1 # Use a specific, recent version
+    environment:
+      - "discovery.type=single-node"
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # Adjust memory as needed for your EC2 instance
+      - "xpack.security.enabled=false" # Easiest for setup. See note below for production.
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.1 # Match the Elasticsearch version
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  fluentd:
+    image: fluent/fluentd:v1.16-1 # Use a specific, recent version
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes:
+      - type: bind
+        source: /home/ubuntu/fluentd.conf
+        target: /fluentd/etc/fluent.conf
+      - fluentd_data:/fluentd/log
+    depends_on:
+      - elasticsearch
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
 volumes:
   mongo_data:
   mongo_config:
   mongo_dump_data:
   portainer_data:
+  # --- ADD NEW VOLUMES FOR EFK ---
+  esdata:
+  fluentd_data:
+
 networks:
   app-network:
     driver: overlay
- 
- 
