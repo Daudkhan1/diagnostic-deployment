@@ -211,23 +211,31 @@ services:
         condition: on-failure
 
   fluentd:
-    image: fluent/fluentd:v1.16-1 # Use a specific, recent version
-    ports:
-      - "24224:24224"
-      - "24224:24224/udp"
-    volumes:
-      - type: bind
-        source: /home/ubuntu/fluentd.conf
-        target: /fluentd/etc/fluent.conf
-      - fluentd_data:/fluentd/log
-    depends_on:
-      - elasticsearch
-    networks:
-      - app-network
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
+      image: fluent/fluentd:v1.16-1
+      # CHANGE THIS SECTION
+      ports:
+        - target: 24224
+          published: 24224
+          protocol: tcp
+          mode: host
+        - target: 24224
+          published: 24224
+          protocol: udp
+          mode: host
+      # THE REST REMAINS THE SAME
+      volumes:
+        - type: bind
+          source: /home/ubuntu/fluentd.conf
+          target: /fluentd/etc/fluent.conf
+        - fluentd_data:/fluentd/log
+      depends_on:
+        - elasticsearch
+      networks:
+        - app-network
+      deploy:
+        replicas: 1
+        restart_policy:
+          condition: on-failure
 
 volumes:
   mongo_data:
