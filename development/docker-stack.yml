@@ -129,7 +129,7 @@ services:
         tag: "docker.{{.Name}}"
  
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev205
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev204
     ports:
       - "8001:8001"
     environment:
@@ -211,7 +211,7 @@ services:
         condition: on-failure
 
   fluentd:
-      image: fluent/fluentd:v1.16-1
+      image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/fluentd-custom:latest
       # CHANGE THIS SECTION
       ports:
         - target: 24224
