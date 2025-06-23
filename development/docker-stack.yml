@@ -3,29 +3,22 @@ version: "3.8"
 services:
   cantaloupe:
     image: islandora/cantaloupe:3
-    ports:
-      - "8182:8182"
+    ports: ["8182:8182"]
     environment:
       - CANTALOUPE_HEAP_MIN=3G
       - CANTALOUPE_HEAP_MAX=5G
       - CANTALOUPE_HTTP_PORT=8182
       - CANTALOUPE_SOURCE_STATIC=S3Source
       - CANTALOUPE_S3SOURCE_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
-      - CANTALOUPE_S3SOURCE_SECRET_KEY=${PRAID_S3_SECRET_ACCESS_KEY}
+      - CANTALOUPE_S3SOURCE_SECRET_KEY=${PRAID_S3_SECRET_KEY}
       - CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_BUCKET_NAME=${PRAID_S3_BUCKET_NAME}
       - CANTALOUPE_S3SOURCE_REGION=${PRAID_S3_REGION_NAME}
-      - CANTALOUPE_PROCESSOR_MANUALSELECTIONSTRATEGY_TIF=JaiProcessor
-      - CANTALOUPE_S3SOURCE_LOOKUP_STRATEGY=ScriptLookupStrategy
-      - CANTALOUPE_DELEGATE_SCRIPT_ENABLED=true
-      - CANTALOUPE_DELEGATE_SCRIPT_PATHNAME=/opt/cantaloupe/delegates.rb
-      - CANTALOUPE_CACHE_SERVER_SOURCE=""
     volumes:
       - type: bind
         source: /home/ubuntu/delegates.rb
         target: /opt/cantaloupe/delegates.rb
-    networks:
-      - app-network
-    deploy:
+    networks: [app-network]
+    deploy: # <-- ADDED BACK
       replicas: 1
       restart_policy:
         condition: on-failure
@@ -39,32 +32,34 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   mongo:
     image: mongo:latest
-    container_name: mongo_container
     command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
-    ports:
-      - 27017:27017
-    networks:
-      - app-network
+    ports: ["27017:27017"]
+    networks: [app-network]
     volumes:
       - mongo_data:/data/db
       - mongo_config:/data/configdb
       - type: bind
         source: /home/ubuntu/dump
         target: /dump
-    deploy:
+    deploy: # <-- ADDED BACK
       replicas: 1
       restart_policy:
         condition: on-failure
         delay: 10s
         max_attempts: 10
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   mongo-init:
     image: mongo:latest
-    depends_on:
-      - mongo
+    depends_on: [mongo]
     entrypoint: >
       bash -c "
       for i in {1..30}; do
@@ -78,23 +73,21 @@ services:
           }' && break;
       done;
       echo 'MongoDB replica set initiated.'"
-    networks:
-      - app-network
-    deploy:
+    networks: [app-network]
+    deploy: # <-- PRESERVED
       replicas: 1
-      restart_policy:
-        condition: none
+      restart_policy: { condition: none }
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   react_app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev35
-    ports:
-      - "5173:5173"
-    environment:
-      - NODE_ENV=production
-    networks:
-      - app-network
+    ports: ["5173:5173"]
+    environment: { NODE_ENV: production }
+    networks: [app-network]
     command: ["npm", "run", "dev:prod"]
-    deploy:
+    deploy: # <-- ADDED BACK
       replicas: 1
       restart_policy:
         condition: on-failure
@@ -107,20 +100,20 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   springboot-app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
-    ports:
-      - "8080:8080"
+    ports: ["8080:8080"]
     environment:
       - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
       - SPRING_PROFILES_ACTIVE=without-ai-annotation
       - ANONYMIZER_SERVICE_URL=http://13.233.103.240:8001
-    networks:
-      - app-network
-    depends_on:
-      - mongo-init
-    deploy:
+    networks: [app-network]
+    depends_on: [mongo-init]
+    deploy: # <-- ADDED BACK
       replicas: 1
       restart_policy:
         condition: on-failure
@@ -134,19 +127,19 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev213
-    ports:
-      - "8001:8001"
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev
+    ports: ["8001:8001"]
     environment:
       - AMAZON_S3_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
       - AMAZON_S3_SECRET_ACCESS_KEY=${PRAID_S3_SECRET_ACCESS_KEY}
       - AMAZON_S3_REGION_NAME=${PRAID_S3_REGION_NAME}
-      - OUTPUT_DIRECTORY=/tmp
-    networks:
-      - app-network
-    deploy:
+    networks: [app-network]
+    deploy: # <-- ADDED BACK
       replicas: 1
       restart_policy:
         condition: on-failure
@@ -159,11 +152,13 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   portainer:
     image: portainer/portainer-ce
-    ports:
-      - "9000:9000"
+    ports: ["9000:9000"]
     volumes:
       - type: bind
         source: /var/run/docker.sock
@@ -171,22 +166,83 @@ services:
       - type: volume
         source: portainer_data
         target: /data
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
+    deploy: # <-- PRESERVED
+      placement: { constraints: ["node.role == manager"] }
       replicas: 1
-      restart_policy:
-        condition: on-failure
-    networks:
-      - app-network
+      restart_policy: { condition: on-failure }
+    networks: [app-network]
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
+
+  # --- EFK STACK SERVICES ---
+  
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    environment:
+      - "discovery.type=single-node"
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "xpack.security.enabled=false"
+    ports: ["9200:9200"]
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    networks: [app-network]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --fail http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    deploy: # <-- Added sensible defaults
+      replicas: 1
+      restart_policy: { condition: on-failure }
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.1
+    ports: ["5601:5601"]
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks: [app-network]
+    depends_on:
+      - elasticsearch
+    deploy: # <-- Added sensible defaults
+      replicas: 1
+      restart_policy: { condition: on-failure }
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
+
+  fluentd:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/fluentd-custom:latest
+    ports:
+      - { target: 24224, published: 24224, protocol: tcp, mode: host }
+      - { target: 24224, published: 24224, protocol: udp, mode: host }
+    volumes:
+      - type: bind
+        source: /home/ubuntu/fluentd.conf
+        target: /fluentd/etc/fluent.conf
+      - fluentd_data:/fluentd/log
+    networks: [app-network]
+    depends_on:
+      - elasticsearch
+    deploy: # <-- Added sensible defaults
+      replicas: 1
+      restart_policy: { condition: on-failure }
+    logging:
+      driver: "fluentd"
+      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
+
 volumes:
   mongo_data:
   mongo_config:
   mongo_dump_data:
   portainer_data:
+  esdata:
+  fluentd_data:
+
 networks:
   app-network:
     driver: overlay
- 
- 
