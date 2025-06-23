@@ -1,67 +1,53 @@
 version: "3.8"
  
 services:
-  # =============================================================
-  # EFK LOGGING STACK
-  # =============================================================
+
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
     environment:
-      - "discovery.type=single-node" # Crucial for single-node setup
-      - "ES_JAVA_OPTS=-Xms1g -Xmx1g" # Allocate 1GB heap. Adjust based on your EC2 instance size.
-      - "xpack.security.enabled=false" # WARNING: For dev/testing only. Enable security for production.
+      - cluster.name=efk-cluster
+      - node.name=es-node
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
     volumes:
-      - type: volume
-        source: es_data
-        target: /usr/share/elasticsearch/data
+      - esdata:/usr/share/elasticsearch/data
     networks:
-      - app-network
+      - efk-net
     deploy:
-      replicas: 1
       placement:
-        constraints: [node.role == manager] # Good practice to run ES on a manager node
-      restart_policy:
-        condition: on-failure
- 
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          memory: 4G
+
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.11.1
+    image: docker.elastic.co/kibana/kibana:8.8.0
     environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
     ports:
-      - "5601:5601" # Access Kibana UI
+      - "5601:5601"
     networks:
-      - app-network
-    depends_on:
-      - elasticsearch
+      - efk-net
     deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
- 
+      placement:
+        constraints:
+          - node.role == manager
+
   fluentd:
-    image: fluent/fluentd:v1.16-1
+    image: fluent/fluentd:v1.14-1
     volumes:
-      - type: bind
-        source: ./fluentd/conf # Mount the configuration directory we created
-        target: /fluentd/etc
-      - type: volume
-        source: fluentd_buffer # Persistent volume for the log buffer
-        target: /fluentd/log
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
     ports:
       - "24224:24224"
       - "24224:24224/udp"
     networks:
-      - app-network
-    depends_on:
-      - elasticsearch
+      - efk-net
     deploy:
-      mode: global # IMPORTANT: Run one instance of fluentd on every node in the swarm
-      restart_policy:
-        condition: on-failure
- 
-  # =============================================================
-  # YOUR EXISTING APPLICATION SERVICES (MODIFIED)
-  # =============================================================
+      mode: global
+      placement:
+        constraints:
+          - node.platform.os == linux
 
 
   cantaloupe:
@@ -102,12 +88,11 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
-    logging: # ADDED
+    logging:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
-        tag: "docker.cantaloupe"
-
+        tag: cantaloupe
  
   mongo:
     image: mongo:latest
@@ -129,11 +114,12 @@ services:
         condition: on-failure
         delay: 10s
         max_attempts: 10
-    logging: # ADDED
+    logging:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
-        tag: "docker.mongo"
+        tag: mongo
+
  
   mongo-init:
     image: mongo:latest
@@ -158,14 +144,11 @@ services:
       replicas: 1
       restart_policy:
         condition: none
-    logging: # ADDED
-      driver: "fluentd"
-      options:
-        fluentd-address: localhost:24224
-        tag: "docker.mongo-init"
+
+
  
   react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev32
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev35
     ports:
       - "5173:5173"
     environment:
@@ -186,11 +169,12 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
-    logging: # ADDED
+    logging:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
-        tag: "docker.react_app"
+        tag: react_app
+
  
   springboot-app:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
@@ -218,14 +202,15 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
-    logging: # ADDED
+    logging:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
-        tag: "docker.springboot-app"
+        tag: springboot-app
+
  
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev215
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev203
     ports:
       - "8001:8001"
     environment:
@@ -248,12 +233,12 @@ services:
       rollback_config:
         parallelism: 1
         delay: 10s
-    logging: # ADDED
+    logging:
       driver: "fluentd"
       options:
         fluentd-address: localhost:24224
-        tag: "docker.anonymizer-service"
- 
+        tag: anonymizer-service
+
   portainer:
     image: portainer/portainer-ce
     ports:
@@ -274,19 +259,15 @@ services:
         condition: on-failure
     networks:
       - app-network
-    logging: # ADDED (optional, but good to have)
-      driver: "fluentd"
-      options:
-        fluentd-address: localhost:24224
-        tag: "docker.portainer"
 volumes:
-  es_data:
-  fluentd_buffer:
   mongo_data:
   mongo_config:
+  mongo_dump_data:
   portainer_data:
+  esdata:
 networks:
   app-network:
+  efk-net:
     driver: overlay
  
  
