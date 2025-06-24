@@ -207,8 +207,8 @@ services:
     ports: ["5601:5601"]
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=kibana_system
-      - ELASTICSEARCH_PASSWORD=kibanapass
+      - ELASTICSEARCH_USERNAME=praid
+      - ELASTICSEARCH_PASSWORD=praidai-org1
     networks: [app-network]
     depends_on:
       - elasticsearch
