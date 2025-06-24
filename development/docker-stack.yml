@@ -132,7 +132,7 @@ services:
       options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev223
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev217
     ports: ["8001:8001"]
     environment:
       - AMAZON_S3_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
@@ -182,8 +182,7 @@ services:
     environment:
       - "discovery.type=single-node"
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - "xpack.security.enabled=true"
-      - "ELASTIC_PASSWORD=elasticpass"
+      - "xpack.security.enabled=false"
     ports: ["9200:9200"]
     volumes:
       - esdata:/usr/share/elasticsearch/data
@@ -194,31 +193,27 @@ services:
       timeout: 10s
       retries: 5
       start_period: 40s
-    deploy:
+    deploy: # <-- Added sensible defaults
       replicas: 1
       restart_policy: { condition: on-failure }
     logging:
       driver: "fluentd"
       options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
-
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.1
     ports: ["5601:5601"]
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=kibana_system_user
-      - ELASTICSEARCH_PASSWORD=kibanapass 
     networks: [app-network]
     depends_on:
       - elasticsearch
-    deploy:
+    deploy: # <-- Added sensible defaults
       replicas: 1
       restart_policy: { condition: on-failure }
     logging:
       driver: "fluentd"
       options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
-
 
   fluentd:
     image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/fluentd-custom:latest
