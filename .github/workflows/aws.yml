@@ -132,7 +132,9 @@ jobs:
         run: |
           aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
 
-          
+      - name: Copy Docker Compose file to EC2
+        run: |
+          echo "Sending SSM command to copy Docker Compose file..."
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \
