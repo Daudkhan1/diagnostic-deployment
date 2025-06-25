@@ -81,8 +81,8 @@ jobs:
 
           sed -i "s|\(831926608672.dkr.ecr.ap-south-1.amazonaws.com/${IMAGE_NAME}:\)[^[:space:]]*|\1${IMAGE_TAG}|g" "$FILE_PATH"
 
-          git config user.name "Daudkhan1"
-          git config user.email "daudidrees1024@gmail.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add "$FILE_PATH"
           git commit -m "Update image tag to ${IMAGE_TAG} for ${IMAGE_NAME}" || echo "No changes to commit"
