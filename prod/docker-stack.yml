@@ -92,7 +92,7 @@ services:
         delay: 10s
 
   anonymizer-service:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:v201
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:daud
     ports:
       - "8001:8001"
     environment:
