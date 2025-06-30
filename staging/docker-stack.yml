@@ -1,0 +1,192 @@
+version: "3.8"
+ 
+services:
+  cantaloupe:
+    image: islandora/cantaloupe:3
+    ports:
+      - "8182:8182"
+    environment:
+      - CANTALOUPE_HEAP_MIN=3G
+      - CANTALOUPE_HEAP_MAX=5G
+      - CANTALOUPE_HTTP_PORT=8182
+      - CANTALOUPE_SOURCE_STATIC=S3Source
+      - CANTALOUPE_S3SOURCE_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
+      - CANTALOUPE_S3SOURCE_SECRET_KEY=${PRAID_S3_SECRET_ACCESS_KEY}
+      - CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_BUCKET_NAME=${PRAID_S3_BUCKET_NAME}
+      - CANTALOUPE_S3SOURCE_REGION=${PRAID_S3_REGION_NAME}
+      - CANTALOUPE_PROCESSOR_MANUALSELECTIONSTRATEGY_TIF=JaiProcessor
+      - CANTALOUPE_S3SOURCE_LOOKUP_STRATEGY=ScriptLookupStrategy
+      - CANTALOUPE_DELEGATE_SCRIPT_ENABLED=true
+      - CANTALOUPE_DELEGATE_SCRIPT_PATHNAME=/opt/cantaloupe/delegates.rb
+      - CANTALOUPE_CACHE_SERVER_SOURCE=""
+    volumes:
+      - type: bind
+        source: /home/ubuntu/delegates.rb
+        target: /opt/cantaloupe/delegates.rb
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+ 
+  mongo:
+    image: mongo:latest
+    container_name: mongo_container
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - 27017:27017
+    networks:
+      - app-network
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+      - type: bind
+        source: /home/ubuntu/dump
+        target: /dump
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+ 
+  mongo-init:
+    image: mongo:latest
+    depends_on:
+      - mongo
+    entrypoint: >
+      bash -c "
+      for i in {1..30}; do
+        echo 'Waiting for Mongo...';
+        sleep 2;
+        mongosh --host mongo --port 27017 --eval '
+          try {
+            rs.status();
+          } catch (e) {
+            rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo:27017\"}]});
+          }' && break;
+      done;
+      echo 'MongoDB replica set initiated.'"
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+ 
+  react_app:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev40
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - app-network
+    command: ["npm", "run", "dev:prod"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+ 
+  springboot-app:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:updated
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
+      - SPRING_PROFILES_ACTIVE=without-ai-annotation
+      - ANONYMIZER_SERVICE_URL=http://13.233.103.240:8001
+    networks:
+      - app-network
+    depends_on:
+      - mongo-init
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+      update_config:
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+ 
+  anonymizer-service:
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-anonymizer:dev-c1ab2be
+    ports:
+      - "8001:8001"
+    environment:
+      - AMAZON_S3_ACCESS_KEY_ID=${PRAID_S3_ACCESS_KEY_ID}
+      - AMAZON_S3_SECRET_ACCESS_KEY=${PRAID_S3_SECRET_ACCESS_KEY}
+      - AMAZON_S3_REGION_NAME=${PRAID_S3_REGION_NAME}
+      - OUTPUT_DIRECTORY=/tmp
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+ 
+  portainer:
+    image: portainer/portainer-ce
+    ports:
+      - "9000:9000"
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+      - type: volume
+        source: portainer_data
+        target: /data
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - app-network
+volumes:
+  mongo_data:
+  mongo_config:
+  mongo_dump_data:
+  portainer_data:
+networks:
+  app-network:
+    driver: overlay
+ 
+ 
