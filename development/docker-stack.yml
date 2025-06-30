@@ -179,11 +179,17 @@ services:
         condition: on-failure
     networks:
       - app-network
+      
 volumes:
   mongo_data:
+    name: ubuntu_mongo_data
+    external: true
   mongo_config:
+    name: ubuntu_mongo_config
+    external: true
   mongo_dump_data:
   portainer_data:
+
 networks:
   app-network:
     driver: overlay
