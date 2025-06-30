@@ -93,7 +93,6 @@ services:
       - NODE_ENV=production
     networks:
       - app-network
-    command: ["npm", "run", "dev:prod"]
     deploy:
       replicas: 1
       restart_policy:
