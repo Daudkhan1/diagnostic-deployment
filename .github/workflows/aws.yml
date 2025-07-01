@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   deploy:
+    if: github.event.client_payload.branch == 'main' || github.event.client_payload.branch == 'staging'
     name: Deploy to EC2
     runs-on: ubuntu-latest
 
