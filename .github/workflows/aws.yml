@@ -43,6 +43,10 @@ jobs:
             echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
             echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
             echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
+          elif [ "$BRANCH" == "development" ]; then
+            echo "DEPLOY_ENV=development" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.DEV_EC2_INSTANCE }}" >> $GITHUB_ENV
           elif [ "$BRANCH" == "staging" ]; then
             echo "DEPLOY_ENV=staging" >> $GITHUB_ENV
             echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV
