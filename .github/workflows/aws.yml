@@ -162,7 +162,7 @@ jobs:
               "echo Deploying with Docker Stack...",
               "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
               "sleep 30",
-              "docker rmi -f $(docker images -q)",
+              "docker image prune -a -f",
               "docker container prune -f",
               "echo Deployment complete!"
             ]}' \
