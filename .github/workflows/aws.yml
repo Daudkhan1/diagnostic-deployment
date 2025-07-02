@@ -162,8 +162,8 @@ jobs:
               "echo Deploying with Docker Stack...",
               "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
               "sleep 30",
-              "docker image prune -a -f",
-              "docker image prune -a -f --filter \"label!=keep\"",
+              "docker rmi -f $(docker images -q)",
+              "docker container prune -f",
               "echo Deployment complete!"
             ]}' \
             --comment "Swarm Deployment with Zero Downtime" \
