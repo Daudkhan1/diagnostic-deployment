@@ -35,7 +35,7 @@ services:
       driver: "fluentd"
       options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
   mongo:
-    image: mongo:latest
+    image: daudidrees/mongo:1.0
     command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
     ports: ["27017:27017"]
     networks: [app-network]
@@ -51,29 +51,6 @@ services:
         condition: on-failure
         delay: 10s
         max_attempts: 10
-    logging:
-      driver: "fluentd"
-      options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
-  mongo-init:
-    image: mongo:latest
-    depends_on: [mongo]
-    entrypoint: >
-      bash -c "
-      for i in {1..30}; do
-        echo 'Waiting for Mongo...';
-        sleep 2;
-        mongosh --host mongo --port 27017 --eval '
-          try {
-            rs.status();
-          } catch (e) {
-            rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo:27017\"}]});
-          }' && break;
-      done;
-      echo 'MongoDB replica set initiated.'"
-    networks: [app-network]
-    deploy: # <-- PRESERVED
-      replicas: 1
-      restart_policy: { condition: none }
     logging:
       driver: "fluentd"
       options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
