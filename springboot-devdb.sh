@@ -5,6 +5,8 @@ set -e
 STACK_NAME="praid"
 SERVICE_NAME="springboot-app"
 DB_NAME="diagnostics"
+PROD_DB_NAME="diagnostic"
+MONGO_ATLAS_URI="mongodb+srv://daud:daudmongo1122@mongocluster.rsosbt7.mongodb.net/diagnostic?retryWrites=true&w=majority&appName=mongocluster"
 BACKUP_DIR="/home/ubuntu/mongo-backups"
 TIMESTAMP=$(date +"%Y-%m-%d-%H-%M")
 OLD_STACK="/home/ubuntu/docker-stack.yml"
@@ -13,6 +15,7 @@ BACKUP_PATH="${BACKUP_DIR}/springboot-backup-${TIMESTAMP}.gz"
 PROD_DUMP_DIR="/tmp/daily-backup-prod-db"
 
 mkdir -p "$BACKUP_DIR"
+aws s3 cp s3://$S3_BUCKET_NAME/$DEPLOY_ENV/delegates.rb /home/ubuntu/delegates.rb
 
 
 # === FUNCTION: Extract image tag ===
@@ -43,6 +46,7 @@ echo "New Tag: $NEW_TAG"
 
 if [ "$OLD_TAG" == "$NEW_TAG" ]; then
   echo "No change in springboot-app image tag. Skipping backup/restore logic."
+  aws ecr get-login-password --region "$AMAZON_S3_REGION_NAME" | docker login --username AWS --password-stdin "$ECR_URI"
   docker stack deploy -c "$NEW_STACK" --with-registry-auth "$STACK_NAME"
   exit 0
 fi
@@ -54,6 +58,7 @@ docker exec $(docker ps --filter "name=${STACK_NAME}_mongo" -q) mongodump --db="
 echo "Backup saved to $BACKUP_PATH"
 
 # === STEP 3: Deploy stack ===
+aws ecr get-login-password --region "$AMAZON_S3_REGION_NAME" | docker login --username AWS --password-stdin "$ECR_URI"
 docker stack deploy -c "$NEW_STACK" --with-registry-auth "$STACK_NAME"
 echo "Waiting 120s for service to stabilize..."
 sleep 120
@@ -73,7 +78,7 @@ else
   # === STEP 5: Dump prod DB ===
   echo "Dumping production database to $PROD_DUMP_DIR..."
   mkdir -p "$PROD_DUMP_DIR"
-  docker exec $(docker ps --filter "name=${STACK_NAME}_mongo" -q) mongodump --db="$DB_NAME" --out="$PROD_DUMP_DIR"
+  mongodump --uri="$MONGO_ATLAS_URI" --db="$PROD_DB_NAME" --out="$PROD_DUMP_DIR"
 
   # === STEP 6: Truncate dev DB ===
   echo "Truncating dev database..."
@@ -82,6 +87,6 @@ else
 
   # === STEP 7: Restore prod dump into dev DB ===
   echo "Restoring prod DB into dev environment..."
-  docker exec $(docker ps --filter "name=${STACK_NAME}_mongo" -q) mongorestore --dir="$PROD_DUMP_DIR" --drop
+  docker exec $(docker ps --filter "name=${STACK_NAME}_mongo" -q) mongorestore --nsFrom="${PROD_DB_NAME}.*" --nsTo="${DB_NAME}.*" --dir="$PROD_DUMP_DIR" --drop
   echo "Dev DB updated with fresh Prod data."
 fi
