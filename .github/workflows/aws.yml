@@ -68,6 +68,18 @@ jobs:
           echo "IMAGE_TAG=${IMAGE_TAG}"
           echo "Checking file: ${DEPLOY_ENV}/docker-stack.yml"
           ls -R
+
+          
+      - name: Check if image is diagnostic-runtime
+        if: ${{ env.IMAGE_NAME == 'diagnostic-runtime' }}
+        run: |
+          echo "Copying springboot-devdb.sh to S3..."
+          aws s3 cp springboot-devdb.sh s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/scripts/
+
+      - name: Skip script upload for other services
+        if: ${{ env.IMAGE_NAME != 'diagnostic-runtime' }}
+        run: echo "Skipping .sh script upload. Not a springboot update."
+      
           
       - name: Update and commit image tag in docker-stack.yml
         env:
@@ -142,31 +154,16 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \
-            --parameters '{"commands": [
-
-              "#!/bin/bash",
-              "echo Trying to fetch docker-stack.yml from s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/docker-stack.yml /home/ubuntu/docker-stack.yml",
-              "echo Fetching delegates.rb file...",
-              "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/delegates.rb /home/ubuntu/delegates.rb",
-              "echo Checking docker and docker-compose paths...",
-              "which docker",
-              "docker --version",
-
-              "echo Logging into AWS ECR...",
-              "aws ecr get-login-password --region ${{ secrets.AMAZON_S3_REGION_NAME }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URI }}",
-              
-              "cd /home/ubuntu",
-              "docker swarm init || echo Already initialized",
-              "echo Enabling Docker Swarm...",
-              "echo Deploying with Docker Stack...",
-              "sudo docker stack deploy -c /home/ubuntu/docker-stack.yml --with-registry-auth praid",
-              "sleep 30",
-              "docker rmi -f $(docker images -q)",
-              "docker container prune -f",
-              "echo Deployment complete!"
-            ]}' \
-            --comment "Swarm Deployment with Zero Downtime" \
+            --parameters '{
+              "commands": [
+                "export S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}",
+                "export DEPLOY_ENV=${{ env.DEPLOY_ENV }}",
+                "export AMAZON_S3_REGION_NAME=${{ secrets.AMAZON_S3_REGION_NAME }}",
+                "export ECR_URI=${{ secrets.ECR_URI }}",
+                "bash /home/ubuntu/springboot-devdb.sh"
+              ]
+            }' \
+            --comment "Run zero-downtime.sh for Docker deployment" \
             --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
             --query "Command.CommandId" \
             --output text)
@@ -175,7 +172,7 @@ jobs:
 
           STATUS="Pending"
           for i in {1..30}; do
-            echo "Polling SSM status... attempt $i"
+            echo "Polling SSM command status... attempt $i"
             STATUS=$(aws ssm list-command-invocations \
               --command-id "$COMMAND_ID" \
               --details \
@@ -185,7 +182,7 @@ jobs:
             echo "Current status: $STATUS"
 
             if [ "$STATUS" == "Success" ]; then
-              echo "Deployment completed successfully."
+              echo "zero-downtime.sh completed successfully."
               break
             elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
               echo "Deployment failed with status: $STATUS"
@@ -208,6 +205,8 @@ jobs:
             exit 1
           fi
         env:
-          PROD_EC2_INSTANCE: ${{ env.EC2_INSTANCE }}"
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
           AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
           ECR_URI: ${{ secrets.ECR_URI }}
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
