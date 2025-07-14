@@ -156,6 +156,7 @@ jobs:
             --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \
             --parameters '{
               "commands": [
+                "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/scripts/zero-downtime.sh /home/ubuntu/springboot-devdb.sh",
                 "export S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}",
                 "export DEPLOY_ENV=${{ env.DEPLOY_ENV }}",
                 "export AMAZON_S3_REGION_NAME=${{ secrets.AMAZON_S3_REGION_NAME }}",
