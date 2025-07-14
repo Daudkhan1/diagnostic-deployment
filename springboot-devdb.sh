@@ -87,6 +87,9 @@ else
 
   # === STEP 7: Restore prod dump into dev DB ===
   echo "Restoring prod DB into dev environment..."
-  docker exec $(docker ps --filter "name=${STACK_NAME}_mongo" -q) mongorestore --nsFrom="${PROD_DB_NAME}.*" --nsTo="${DB_NAME}.*" --dir="$PROD_DUMP_DIR" --drop
+  echo "Restoring prod DB into dev environment from host..."
+  mongorestore --host localhost --port 27017 \
+    --nsFrom="${PROD_DB_NAME}.*" --nsTo="${DB_NAME}.*" \
+    --dir="$PROD_DUMP_DIR" --drop
   echo "Dev DB updated with fresh Prod data."
 fi
