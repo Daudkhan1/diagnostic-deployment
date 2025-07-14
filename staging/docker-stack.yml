@@ -78,7 +78,7 @@ services:
       options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   springboot-app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:dev-8fbf187
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-runtime:dev-192dca7
     ports: ["8080:8080"]
     environment:
       - SPRING_DATA_MONGODB_URI=${DB_MONGO_URL_PROD}
