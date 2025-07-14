@@ -46,6 +46,7 @@ echo "New Tag: $NEW_TAG"
 
 if [ "$OLD_TAG" == "$NEW_TAG" ]; then
   echo "No change in springboot-app image tag. Skipping backup/restore logic."
+  docker swarm init || echo "Swarm already initialized"
   aws ecr get-login-password --region "$AMAZON_S3_REGION_NAME" | docker login --username AWS --password-stdin "$ECR_URI"
   docker stack deploy -c "$NEW_STACK" --with-registry-auth "$STACK_NAME"
   exit 0
@@ -59,6 +60,7 @@ echo "Backup saved to $BACKUP_PATH"
 
 # === STEP 3: Deploy stack ===
 aws ecr get-login-password --region "$AMAZON_S3_REGION_NAME" | docker login --username AWS --password-stdin "$ECR_URI"
+docker swarm init || echo "Swarm already initialized"
 docker stack deploy -c "$NEW_STACK" --with-registry-auth "$STACK_NAME"
 echo "Waiting 120s for service to stabilize..."
 sleep 120
