@@ -29,7 +29,7 @@ OLD_TAG=$(get_image_tag "$OLD_STACK")
 
 # === STEP 2: Copy updated docker-stack.yml from S3 ===
 echo "Fetching updated docker-stack.yml from S3..."
-aws s3 cp s3://${S3_BUCKET}/${DEPLOY_ENV}/docker-stack.yml /home/ubuntu/docker-stack.yml
+aws s3 cp s3://${S3_BUCKET_NAME}/${DEPLOY_ENV}/docker-stack.yml /home/ubuntu/docker-stack.yml
 
 # === STEP 3: Extract NEW tag after updated file is copied ===
 echo "Extracting NEW image tag from updated stack file..."
