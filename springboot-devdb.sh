@@ -64,7 +64,7 @@ if [ "$OLD_TAG" == "$NEW_TAG" ]; then
 
   echo "[STEP] Deploying unchanged stack..."
   docker stack deploy -c "$NEW_STACK" --with-registry-auth "$STACK_NAME"
-  
+  docker rmi -f $(docker images -q)
   echo "[DONE] Script completed without updates."
   exit 0
 fi
@@ -86,8 +86,8 @@ docker swarm init || echo "[INFO] Swarm already initialized"
 echo "[STEP] Deploying updated stack..."
 docker stack deploy -c "$NEW_STACK" --with-registry-auth "$STACK_NAME"
 echo "[WAIT] Waiting 120s for service to stabilize..."
-sleep 120
-
+sleep 60
+docker rmi -f $(docker images -q)
 # === STEP 4: Check if deployment failed (rollback happened) ===
 echo "[STEP] Inspecting currently running image tag..."
 RUNNING_TAG=$(docker service inspect "${STACK_NAME}_${SERVICE_NAME}" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}' | awk -F: '{print $NF}')
