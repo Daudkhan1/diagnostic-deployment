@@ -161,7 +161,7 @@ jobs:
                 "export DEPLOY_ENV=${{ env.DEPLOY_ENV }}",
                 "export AMAZON_S3_REGION_NAME=${{ secrets.AMAZON_S3_REGION_NAME }}",
                 "export ECR_URI=${{ secrets.ECR_URI }}",
-                "bash /home/ubuntu/springboot-devdb.sh"
+                "bash /home/ubuntu/springboot-devdb.sh > /home/ubuntu/springboot-devdb.logs 2>&1"
               ]
             }' \
             --comment "Run zero-downtime.sh for Docker deployment" \
