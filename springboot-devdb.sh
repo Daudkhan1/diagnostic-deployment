@@ -57,7 +57,7 @@ if [ "$OLD_TAG" == "$NEW_TAG" ]; then
   echo "[RESULT] No change in springboot-app image tag. Skipping backup/restore logic."
 
   echo "[STEP] Ensuring Swarm is initialized..."
-  docker swarm init || echo "[INFO] 🐳 Swarm already initialized"
+  docker swarm init || echo "[INFO] Swarm already initialized"
 
   echo "[STEP] Logging into AWS ECR..."
   aws ecr get-login-password --region "$AMAZON_S3_REGION_NAME" | docker login --username AWS --password-stdin "$ECR_URI"
