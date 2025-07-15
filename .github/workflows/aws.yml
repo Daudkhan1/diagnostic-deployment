@@ -70,15 +70,10 @@ jobs:
           ls -R
 
           
-      - name: Check if image is diagnostic-runtime
-        if: ${{ env.IMAGE_NAME == 'diagnostic-runtime' }}
+      - name: Upload springboot-devdb.sh to S3
         run: |
           echo "Copying springboot-devdb.sh to S3..."
           aws s3 cp springboot-devdb.sh s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/scripts/
-
-      - name: Skip script upload for other services
-        if: ${{ env.IMAGE_NAME != 'diagnostic-runtime' }}
-        run: echo "Skipping .sh script upload. Not a springboot update."
       
           
       - name: Update and commit image tag in docker-stack.yml
