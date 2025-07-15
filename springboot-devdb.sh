@@ -64,6 +64,8 @@ if [ "$OLD_TAG" == "$NEW_TAG" ]; then
 
   echo "[STEP] Deploying unchanged stack..."
   docker stack deploy -c "$NEW_STACK" --with-registry-auth "$STACK_NAME"
+  sleep 30
+  docker container prune -f && docker image prune -a -f
   echo "[DONE] Script completed without updates."
   exit 0
 fi
@@ -86,6 +88,7 @@ echo "[STEP] Deploying updated stack..."
 docker stack deploy -c "$NEW_STACK" --with-registry-auth "$STACK_NAME"
 echo "[WAIT] Waiting 120s for service to stabilize..."
 sleep 60
+docker container prune -f && docker image prune -a -f
 # === STEP 4: Check if deployment failed (rollback happened) ===
 echo "[STEP] Inspecting currently running image tag..."
 RUNNING_TAG=$(docker service inspect "${STACK_NAME}_${SERVICE_NAME}" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}' | awk -F: '{print $NF}')
