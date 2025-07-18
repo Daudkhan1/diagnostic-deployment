@@ -1,5 +1,6 @@
-name: Deploy to Localhost
+name: Deploy to Local Machine
 
+# This workflow runs on every push to the 'main' branch
 on:
   push:
     branches:
@@ -7,19 +8,43 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # This is the crucial part: it tells GitHub to run this job on your local machine
+    runs-on: self-hosted
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: 1. Check out the repository code
+        uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
-
-      - name: SSH into local Ubuntu
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} "echo '✅ Connected from GitHub Actions'; hostname"
+      - name: 2. Deploy to localhost via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # The IP address of the local machine
+          host: ${{ secrets.SSH_HOST }}
+          
+          # The username on the local machine
+          username: ${{ secrets.SSH_USER }}
+          
+          # The private SSH key for authentication
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          
+          # The default SSH port
+          port: 22
+          
+          # The commands to run on your local machine after connecting
+          script: |
+            echo "✅ Deployment started at $(date)"
+            # Navigate to where you want to deploy the code.
+            # IMPORTANT: Change this path to your actual project path!
+            cd /Users/your-user/projects/my-app
+            
+            # Here are some example deployment commands.
+            # Replace these with the actual commands needed for your project.
+            echo "📝 Writing a deployment log..."
+            echo "Deployment successful on $(date)" > deployment_log.txt
+            
+            # Example for a Node.js app:
+            # git pull origin main
+            # npm install
+            # pm2 restart my-app
+            
+            echo "🚀 Deployment to localhost finished!"
