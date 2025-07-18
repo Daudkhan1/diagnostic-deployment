@@ -1,6 +1,5 @@
-name: Deploy to Local Machine
+name: Deploy to Localhost
 
-# This workflow runs on every push to the 'main' branch
 on:
   push:
     branches:
@@ -8,43 +7,13 @@ on:
 
 jobs:
   deploy:
-    # This is the crucial part: it tells GitHub to run this job on your local machine
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Check out the repository code
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      - name: 2. Deploy to localhost via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          # The IP address of the local machine
-          host: ${{ secrets.HOST }}
-          
-          # The username on the local machine
-          username: ${{ secrets.USER }}
-          
-          # The private SSH key for authentication
-          key: ${{ secrets.LOCALHOST_SSH_KEY }}
-          
-          # The default SSH port
-          port: 22
-          
-          # The commands to run on your local machine after connecting
-          script: |
-            echo "✅ Deployment started at $(date)"
-            # Navigate to where you want to deploy the code.
-            # IMPORTANT: Change this path to your actual project path!
-            cd ~
-            
-            # Here are some example deployment commands.
-            # Replace these with the actual commands needed for your project.
-            echo "📝 Writing a deployment log..."
-            echo "Deployment successful on $(date)" > deployment_log.txt
-            
-            # Example for a Node.js app:
-            # git pull origin main
-            # npm install
-            # pm2 restart my-app
-            
-            echo "🚀 Deployment to localhost finished!"
+
+      - name: SSH into local Ubuntu
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} "echo '✅ Connected from GitHub Actions'; hostname"
