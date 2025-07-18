@@ -7,13 +7,24 @@ on:
 
 jobs:
   deploy:
+    # This job still runs on a GitHub-hosted machine
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-
-      - name: SSH into local Ubuntu
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} "echo '✅ Connected from GitHub Actions'; hostname"
+      # This is the CORRECT way to use secrets for an SSH connection
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }} # The action handles this secret correctly
+          port: 22
+          script: |
+            # These commands will be run on YOUR local machine after connecting
+            echo "✅ Successfully connected from GitHub Actions"
+            echo "Host is:"
+            hostname
+            echo "Deployment finished."
