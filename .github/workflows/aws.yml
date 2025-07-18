@@ -18,9 +18,9 @@ jobs:
       - name: SSH and Deploy
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }} # The action handles this secret correctly
+          host: 202.125.154.5
+          username: praid
+          key: ${{ secrets.SSH_PRIVATE_KEY }} 
           port: 22
           script: |
             # These commands will be run on YOUR local machine after connecting
