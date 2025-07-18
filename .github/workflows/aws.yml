@@ -19,13 +19,13 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           # The IP address of the local machine
-          host: ${{ secrets.SSH_HOST }}
+          host: ${{ secrets.HOST }}
           
           # The username on the local machine
-          username: ${{ secrets.SSH_USER }}
+          username: ${{ secrets.USER }}
           
           # The private SSH key for authentication
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.LOCALHOST_SSH_KEY }}
           
           # The default SSH port
           port: 22
@@ -35,7 +35,7 @@ jobs:
             echo "✅ Deployment started at $(date)"
             # Navigate to where you want to deploy the code.
             # IMPORTANT: Change this path to your actual project path!
-            cd /Users/your-user/projects/my-app
+            cd ~
             
             # Here are some example deployment commands.
             # Replace these with the actual commands needed for your project.
