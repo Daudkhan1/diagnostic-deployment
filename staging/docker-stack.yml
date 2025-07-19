@@ -56,7 +56,7 @@ services:
       options: { fluentd-address: localhost:24224, tag: "docker.{{.Name}}" }
  
   react_app:
-    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev-abe65c1
+    image: 831926608672.dkr.ecr.ap-south-1.amazonaws.com/diagnostic-ui:dev-4fd0f9e
     ports: ["5173:5173"]
     environment: { NODE_ENV: production }
     networks: [app-network]
