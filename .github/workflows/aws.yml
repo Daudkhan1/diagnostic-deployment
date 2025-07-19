@@ -1,19 +1,208 @@
-name: SSH to Localhost Test
+name: Deploy to EC2 using AWS CLI
 
 on:
-  push:
-    branches: [ main ]
+  repository_dispatch:
+    types: [web-trigger]
+
+
+permissions:
+  contents: write
+
 
 jobs:
-  ssh-test:
+  deploy:
+    name: Deploy to EC2
     runs-on: ubuntu-latest
-    steps:
-      - name: Set up SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 202.125.154.5 >> ~/.ssh/known_hosts
 
-      - name: Test SSH connection
-        run: ssh -o StrictHostKeyChecking=no praid@202.125.154.5 "hostname && uptime"
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+              # Step 2: Configure AWS CLI 
+      
+      # Step 2: Checkout code
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AMAZON_S3_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AMAZON_S3_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AMAZON_S3_REGION_NAME }}
+          
+      # Step 3: Set environment variables based on branch and get image info from payload
+      - name: Set environment variables
+        id: set-env
+        run: |
+          BRANCH="${{ github.event.client_payload.branch }}"
+          IMAGE_TAG="${{ github.event.client_payload.image_tag }}"
+          IMAGE_NAME="${{ github.event.client_payload.image_name }}"
+          echo "Triggered branch: $BRANCH"
+          echo "Image name to update: $IMAGE_NAME"
+          echo "Image tag to update: $IMAGE_TAG"
+
+          if [ "$BRANCH" == "main" ]; then
+            echo "DEPLOY_ENV=prod" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_PROD }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.PROD_EC2_INSTANCE }}" >> $GITHUB_ENV
+          elif [ "$BRANCH" == "development" ]; then
+            echo "DEPLOY_ENV=development" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.DEV_EC2_INSTANCE }}" >> $GITHUB_ENV
+          elif [ "$BRANCH" == "staging" ]; then
+            echo "DEPLOY_ENV=staging" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.DEV_EC2_INSTANCE }}" >> $GITHUB_ENV
+          else
+            echo "DEPLOY_ENV=staging" >> $GITHUB_ENV
+            echo "DB_MONGO_URL=${{ secrets.DB_MONGO_URL_DEV }}" >> $GITHUB_ENV
+            echo "EC2_INSTANCE=${{ secrets.DEV_EC2_INSTANCE }}" >> $GITHUB_ENV
+          fi
+
+          # Export image info for later steps
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+
+      - name: Debug File Paths and variables
+        run: |
+          echo "DEPLOY_ENV=${DEPLOY_ENV}"
+          echo "IMAGE_NAME=${IMAGE_NAME}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"
+          echo "Checking file: ${DEPLOY_ENV}/docker-stack.yml"
+          ls -R
+
+          
+      - name: Upload springboot-devdb.sh to S3
+        run: |
+          echo "Copying springboot-devdb.sh to S3..."
+          aws s3 cp springboot-devdb.sh s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/scripts/
+      
+          
+      - name: Update and commit image tag in docker-stack.yml
+        env:
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
+          IMAGE_NAME: ${{ github.event.client_payload.image_name }}
+          GITHUB_TOKEN: ${{ secrets.TOKEN_COMMIT_IMAG_TAG }}
+        run: |
+          FILE_PATH="${DEPLOY_ENV}/docker-stack.yml"
+
+          if [ ! -f "$FILE_PATH" ]; then
+            echo "File not found: $FILE_PATH"
+            exit 1
+          fi
+
+          sed -i "s|\(831926608672.dkr.ecr.ap-south-1.amazonaws.com/${IMAGE_NAME}:\)[^[:space:]]*|\1${IMAGE_TAG}|g" "$FILE_PATH"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "$FILE_PATH"
+          git commit -m "Update image tag to ${IMAGE_TAG} for ${IMAGE_NAME}" || echo "No changes to commit"
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
+          
+      # Step 4: Replace placeholders and update only the relevant image tag in docker-stack.yml
+      - name: Replace placeholders in docker-stack.yml
+        run: |
+          FILE_PATH="${DEPLOY_ENV}/docker-stack.yml"
+
+          if [ ! -f "$FILE_PATH" ]; then
+            echo "Error: $FILE_PATH not found!"
+            exit 1
+          fi
+
+          # Escape Mongo URL for sed
+          ESCAPED_MONGO_URL=$(printf '%s\n' "${DB_MONGO_URL}" | sed 's/[&/$]/\\&/g')
+
+          # Replace generic placeholders
+          sed -i "s|\${DB_MONGO_URL_PROD}|${ESCAPED_MONGO_URL}|g" "$FILE_PATH"
+          sed -i "s|\${PRAID_S3_BUCKET_NAME}|${PRAID_S3_BUCKET_NAME}|g" "$FILE_PATH"
+          sed -i "s|\${PRAID_S3_REGION_NAME}|${PRAID_S3_REGION_NAME}|g" "$FILE_PATH"
+          sed -i "s|\${PRAID_S3_ACCESS_KEY_ID}|${PRAID_S3_ACCESS_KEY_ID}|g" "$FILE_PATH"
+          sed -i "s|\${PRAID_S3_SECRET_ACCESS_KEY}|${PRAID_S3_SECRET_ACCESS_KEY}|g" "$FILE_PATH"
+
+          # Update only the image tag for the image name provided in payload
+          sed -i "s|\(831926608672.dkr.ecr.ap-south-1.amazonaws.com/${IMAGE_NAME}:\)[^[:space:]]*|\1${IMAGE_TAG}|g" "$FILE_PATH"
+
+        env:
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          DB_MONGO_URL: ${{ env.DB_MONGO_URL }}
+          PRAID_S3_BUCKET_NAME: ${{ secrets.PRAID_S3_BUCKET_NAME }}
+          PRAID_S3_REGION_NAME: ${{ secrets.PRAID_S3_REGION_NAME }}
+          PRAID_S3_ACCESS_KEY_ID: ${{ secrets.PRAID_S3_ACCESS_KEY_ID }}
+          PRAID_S3_SECRET_ACCESS_KEY: ${{ secrets.PRAID_S3_SECRET_ACCESS_KEY }}
+          IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
+          IMAGE_NAME: ${{ github.event.client_payload.image_name }}
+
+
+
+      # Step 5: Upload Docker Compose to S3
+      - name: Upload Docker Compose to S3
+        run: |
+          aws s3 cp ${DEPLOY_ENV}/docker-stack.yml s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/docker-stack.yml
+       # New Step: Upload delegates.rb to S3
+      - name: Upload delegates.rb to S3
+        run: |
+          aws s3 cp delegates.rb s3://${{ secrets.S3_BUCKET_NAME }}/${DEPLOY_ENV}/delegates.rb
+
+      - name: Copy Docker Compose file to EC2
+        run: |
+          echo "Sending SSM command to copy Docker Compose file..."
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceIds,Values=${{ env.EC2_INSTANCE }}" \
+            --parameters '{
+              "commands": [
+                "aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/${{ env.DEPLOY_ENV }}/scripts/springboot-devdb.sh /home/ubuntu/springboot-devdb.sh",
+                "export S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}",
+                "export DEPLOY_ENV=${{ env.DEPLOY_ENV }}",
+                "export AMAZON_S3_REGION_NAME=${{ secrets.AMAZON_S3_REGION_NAME }}",
+                "export ECR_URI=${{ secrets.ECR_URI }}",
+                "bash /home/ubuntu/springboot-devdb.sh > /home/ubuntu/springboot-devdb.logs 2>&1"
+              ]
+            }' \
+            --comment "Run zero-downtime.sh for Docker deployment" \
+            --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "Command ID: $COMMAND_ID"
+
+          STATUS="Pending"
+          for i in {1..30}; do
+            echo "Polling SSM command status... attempt $i"
+            STATUS=$(aws ssm list-command-invocations \
+              --command-id "$COMMAND_ID" \
+              --details \
+              --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+              --query "CommandInvocations[0].Status" \
+              --output text)
+            echo "Current status: $STATUS"
+
+            if [ "$STATUS" == "Success" ]; then
+              echo "zero-downtime.sh completed successfully."
+              break
+            elif [[ "$STATUS" == "Failed" || "$STATUS" == "Cancelled" || "$STATUS" == "TimedOut" ]]; then
+              echo "Deployment failed with status: $STATUS"
+              ERROR_OUTPUT=$(aws ssm list-command-invocations \
+                --command-id "$COMMAND_ID" \
+                --details \
+                --region "${{ secrets.AMAZON_S3_REGION_NAME }}" \
+                --query "CommandInvocations[0].CommandPlugins[0].Output" \
+                --output text)
+              echo "Error Output:"
+              echo "$ERROR_OUTPUT"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "Deployment did not complete in time. Final status: $STATUS"
+            exit 1
+          fi
+        env:
+          EC2_INSTANCE: ${{ env.EC2_INSTANCE }}
+          AMAZON_S3_REGION_NAME: ${{ secrets.AMAZON_S3_REGION_NAME }}
+          ECR_URI: ${{ secrets.ECR_URI }}
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
