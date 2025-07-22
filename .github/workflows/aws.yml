@@ -11,18 +11,10 @@ jobs:
     steps:
       - name: Set up SSH key and Known Hosts
         run: |
-          # Create the .ssh directory
           mkdir -p ~/.ssh
-          
-          # Set up the private key for authentication
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
-          # Set up the known_hosts file to verify the server
-          # This completely replaces ssh-keyscan
           echo "202.125.154.5 ${{ secrets.SSH_HOST_PUBLIC_KEY }}" >> ~/.ssh/known_hosts
 
-      - name: Test SSH connection with verbose logging
-        run: |
-          # We use StrictHostKeyChecking=yes now because our known_hosts is perfect
-          ssh -vvv -o StrictHostKeyChecking=yes praid@202.125.154.5 "hostname && uptime"
+      - name: Test SSH connection
+        run: ssh -o StrictHostKeyChecking=yes praid@202.125.154.5 "hostname && uptime"
