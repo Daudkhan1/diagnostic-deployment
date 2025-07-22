@@ -9,15 +9,20 @@ jobs:
   ssh-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up SSH key
+      - name: Set up SSH key and Known Hosts
         run: |
+          # Create the .ssh directory
           mkdir -p ~/.ssh
+          
+          # Set up the private key for authentication
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Add -vvv for verbose logging
-          ssh-keyscan -vvv -H 202.125.154.5 >> ~/.ssh/known_hosts
-      #echo "SSH key setup complete."
-      - name: Test SSH connection
+          
+          # Set up the known_hosts file to verify the server
+          # This completely replaces ssh-keyscan
+          echo "202.125.154.5 ${{ secrets.SSH_HOST_PUBLIC_KEY }}" >> ~/.ssh/known_hosts
+
+      - name: Test SSH connection with verbose logging
         run: |
-          # Add -vvv for verbose logging
-          ssh -vvv -o StrictHostKeyChecking=no praid@202.125.154.5 "hostname && uptime"
+          # We use StrictHostKeyChecking=yes now because our known_hosts is perfect
+          ssh -vvv -o StrictHostKeyChecking=yes praid@202.125.154.5 "hostname && uptime"
