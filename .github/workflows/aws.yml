@@ -8,15 +8,18 @@ jobs:
   ssh-test:
     runs-on: ubuntu-latest
     steps:
+      - name: Check port connectivity
+        run: |
+          # nc (netcat) will try to connect. The -w 10 sets a 10-second timeout.
+          # If it fails, the workflow will stop here with a clear error.
+          nc -zw10 202.125.154.5 22
+
       - name: Set up SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Use the NEW IP address here
-          ssh-keyscan -H 110.93.226.175 >> ~/.ssh/known_hosts
+          ssh-keyscan -H 202.125.154.5 >> ~/.ssh/known_hosts
 
       - name: Test SSH connection
-        run: |
-          # And use the NEW IP address here as well
-          ssh -o StrictHostKeyChecking=no praid@110.93.226.175 "hostname && uptime"
+        run: ssh -o StrictHostKeyChecking=no praid@202.125.154.5 "hostname && uptime"
