@@ -8,12 +8,6 @@ jobs:
   ssh-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Check port connectivity
-        run: |
-          # nc (netcat) will try to connect. The -w 10 sets a 10-second timeout.
-          # If it fails, the workflow will stop here with a clear error.
-          nc -zw10 202.125.154.5 22
-
       - name: Set up SSH key
         run: |
           mkdir -p ~/.ssh
