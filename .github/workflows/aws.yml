@@ -1,20 +1,26 @@
-
-name: SSH to Localhost Test
+name: Deploy to localhost
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
-  ssh-test:
+  deploy:
     runs-on: ubuntu-latest
-    steps:
-      - name: Set up SSH key and Known Hosts
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          echo "202.125.154.5 ${{ secrets.SSH_HOST_PUBLIC_KEY }}" >> ~/.ssh/known_hosts
 
-      - name: Test SSH connection
-        run: ssh -o StrictHostKeyChecking=yes praid@202.125.154.5 "hostname && uptime"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Connect & deploy to localhost
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.LOCAL_HOST_IP }}
+          username: praid
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+          script: |
+            echo "✅ Connected to localhost"
+            hostname
+            whoami
