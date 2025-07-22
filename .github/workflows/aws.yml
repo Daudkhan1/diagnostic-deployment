@@ -16,7 +16,7 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           # Add -vvv for verbose logging
           ssh-keyscan -vvv -H 202.125.154.5 >> ~/.ssh/known_hosts
-
+      #echo "SSH key setup complete."
       - name: Test SSH connection
         run: |
           # Add -vvv for verbose logging
