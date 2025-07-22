@@ -10,17 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
-      - name: Connect & deploy to localhost
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.LOCAL_HOST_IP }}
-          username: praid
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
-          script: |
-            echo "✅ Connected to localhost"
-            hostname
-            whoami
+    - name: Connect & deploy to localhost
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.LOCAL_HOST_IP }}
+        username: praid
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          echo "✅ Connected to localhost"
+          hostname
+          whoami
