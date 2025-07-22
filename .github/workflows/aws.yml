@@ -1,3 +1,4 @@
+
 name: SSH to Localhost Test
 
 on:
@@ -13,7 +14,10 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 202.125.154.5 >> ~/.ssh/known_hosts
+          # Add -vvv for verbose logging
+          ssh-keyscan -vvv -H 202.125.154.5 >> ~/.ssh/known_hosts
 
       - name: Test SSH connection
-        run: ssh -o StrictHostKeyChecking=no praid@202.125.154.5 "hostname && uptime"
+        run: |
+          # Add -vvv for verbose logging
+          ssh -vvv -o StrictHostKeyChecking=no praid@202.125.154.5 "hostname && uptime"
