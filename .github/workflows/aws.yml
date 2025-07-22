@@ -13,7 +13,10 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 202.125.154.5 >> ~/.ssh/known_hosts
+          # Use the NEW IP address here
+          ssh-keyscan -H 110.93.226.175 >> ~/.ssh/known_hosts
 
       - name: Test SSH connection
-        run: ssh -o StrictHostKeyChecking=no praid@202.125.154.5 "hostname && uptime"
+        run: |
+          # And use the NEW IP address here as well
+          ssh -o StrictHostKeyChecking=no praid@110.93.226.175 "hostname && uptime"
