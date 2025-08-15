@@ -1,0 +1,22 @@
+name: Deploy to localhost
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Connect & deploy to localhost
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.LOCAL_HOST_IP }}
+        username: praid
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          echo "✅ Connected to localhost"
+          hostname
+          whoami
